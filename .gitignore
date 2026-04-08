@@ -1,4 +1,12 @@
-# ROOT files
+# External dependency repos (cloned separately, not tracked)
+DDMarlinPandora/
+LCContent/
+PandoraSDK/
+k4RecCalorimeter/
+k4RecTracker/
+k4geo/
+
+# ROOT output files
 *.root
 
 # Python
