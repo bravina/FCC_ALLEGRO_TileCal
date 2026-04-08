@@ -1,0 +1,16 @@
+# ROOT files
+*.root
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.ipynb_checkpoints/
+
+# Build artifacts
+build/
+install/
+
+# Editor
+.vscode/
+*.swp
