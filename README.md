@@ -3,11 +3,37 @@
 Simulation, reconstruction, and analysis of the Tile Hadronic Calorimeter (HCal)
 for the ALLEGRO FCC-ee detector concept, including PandoraPFA particle-flow reconstruction.
 
+## Directory layout
+
+Everything lives under a single working directory:
+
+```
+FCC_ALLEGRO_TileCal/           # this git repository
+    setup.sh
+    README.md
+    k4geo/                     # external dependencies (git-ignored)
+    k4RecCalorimeter/
+    k4RecTracker/
+    PandoraSDK/
+    LCContent/
+    DDMarlinPandora/
+    ALLEGRO_PandoraPFA/
+    runs/                      # simulation and reconstruction output (git-ignored)
+        sim/
+            photon_10GeV_theta60/
+            kaon0L_50GeV_theta60/
+            ...
+        reco/
+            photon_10GeV_theta60/
+            kaon0L_50GeV_theta60/
+            ...
+```
+
 ## Dependencies
 
 All dependencies are built locally on top of the Key4hep nightly stack.
-The following external repositories are required — clone them as siblings of
-this repo inside `$WORKDIR`:
+The following external repositories are required — clone them inside this repo
+(they are git-ignored):
 
 | Package | Fork source | Branch |
 |---|---|---|
@@ -17,6 +43,7 @@ this repo inside `$WORKDIR`:
 | `PandoraSDK` | `giovannimarchiori/PandoraSDK` | `master` |
 | `LCContent` | `Archil-AD/LCContent` | `ALLEGRO` |
 | `DDMarlinPandora` | `Archil-AD/DDMarlinPandora` | `test-hcal-cell-dimensions` |
+| `ALLEGRO_PandoraPFA` | `Archil-AD/ALLEGRO_PandoraPFA` | `main` |
 
 > **Note:** `giovannimarchiori/PandoraSDK` adds `POINTING_THETAPHI` geometry
 > type and `MessageStream.h`, which are required by `DDMarlinPandora` but not
@@ -31,18 +58,21 @@ this repo inside `$WORKDIR`:
 ## 1. Full build (first time only)
 
 ```bash
-export WORKDIR=/afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal
-cd $WORKDIR
+cd /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/
 
 source /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh -r 2026-04-08
 
-# Clone dependency repos (fork these from the sources in the table above)
+# Create runs directory
+mkdir -p runs/sim runs/reco
+
+# Clone dependency repos
 git clone https://github.com/bravina/k4geo.git
 git clone https://github.com/bravina/k4RecCalorimeter.git
 git clone https://github.com/bravina/k4RecTracker.git
 git clone https://github.com/bravina/PandoraSDK.git
 git clone https://github.com/bravina/LCContent.git
 git clone https://github.com/bravina/DDMarlinPandora.git
+git clone https://github.com/Archil-AD/ALLEGRO_PandoraPFA.git
 
 # PandoraCMakeSettings module (from 2026-02-26 nightly, not present in 2026-04-08)
 export PANDORA_CMAKE_MODULE_PATH=/cvmfs/sw-nightlies.hsf.org/key4hep/releases/2026-02-26/x86_64-almalinux9-gcc14.2.0-opt/pandorapfa/4.11.2-tyvaev/cmakemodules
@@ -54,7 +84,7 @@ cmake .. -DCMAKE_INSTALL_PREFIX=../install
 make install -j8
 cd .. && k4_local_repo
 export K4GEO=$PWD/
-cd $WORKDIR
+cd ..
 
 # 2. k4RecCalorimeter (main already contains hcal-endcap-pseudolayer changes)
 cd k4RecCalorimeter
@@ -62,7 +92,7 @@ mkdir build install && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install
 make install -j8
 cd .. && k4_local_repo
-cd $WORKDIR
+cd ..
 
 # 3. k4RecTracker
 cd k4RecTracker && git checkout pandora
@@ -70,7 +100,7 @@ mkdir build install && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install
 make install -j8
 cd .. && k4_local_repo
-cd $WORKDIR
+cd ..
 
 # 4. PandoraSDK
 cd PandoraSDK
@@ -79,7 +109,7 @@ cmake .. -DCMAKE_INSTALL_PREFIX=../install \
   -DCMAKE_MODULE_PATH=$PANDORA_CMAKE_MODULE_PATH
 make install -j8
 cd .. && k4_local_repo
-cd $WORKDIR
+cd ..
 
 # 5. LCContent
 cd LCContent && git checkout ALLEGRO
@@ -88,7 +118,7 @@ cmake .. -DCMAKE_INSTALL_PREFIX=../install \
   -DCMAKE_MODULE_PATH=$PANDORA_CMAKE_MODULE_PATH
 make install -j8
 cd .. && k4_local_repo
-cd $WORKDIR
+cd ..
 
 # 6. DDMarlinPandora
 cd DDMarlinPandora && git checkout test-hcal-cell-dimensions
@@ -97,7 +127,7 @@ cmake .. -DCMAKE_INSTALL_PREFIX=../install \
   -DCMAKE_MODULE_PATH=$PANDORA_CMAKE_MODULE_PATH
 make install -j8
 cd .. && k4_local_repo
-cd $WORKDIR
+cd ..
 ```
 
 ---
@@ -105,7 +135,7 @@ cd $WORKDIR
 ## 2. Quick restart (fresh shell, already compiled)
 
 ```bash
-source /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/FCC_ALLEGRO_TileCal/setup.sh
+source /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/setup.sh
 ```
 
 To change the ALLEGRO geometry version, edit the `ALLEGRO_VERSION` variable at
@@ -116,46 +146,46 @@ the top of `setup.sh`. The compact file path is then available as
 
 ## 3. Running the simulation
 
-After sourcing `setup.sh`, the compact file is available as `$ALLEGRO_COMPACT`.
+After sourcing `setup.sh`:
 
 ```bash
-# Photons — 10 GeV at theta=60 deg
+mkdir -p $RUNSDIR/sim/photon_10GeV_theta60
 ddsim --enableGun --gun.distribution uniform \
   --gun.energy "10*GeV" \
   --gun.thetaMin "60*deg" --gun.thetaMax "60*deg" \
   --gun.particle gamma \
   --numberOfEvents 100 \
-  --outputFile ALLEGRO_sim_photon.root \
+  --outputFile $RUNSDIR/sim/photon_10GeV_theta60/ALLEGRO_sim.root \
   --random.enableEventSeed --random.seed 42 \
   --compactFile $ALLEGRO_COMPACT
 
-# K0L — 50 GeV at theta=60 deg
+mkdir -p $RUNSDIR/sim/kaon0L_50GeV_theta60
 ddsim --enableGun --gun.distribution uniform \
   --gun.energy "50*GeV" \
   --gun.thetaMin "60*deg" --gun.thetaMax "60*deg" \
   --gun.particle kaon0L \
   --numberOfEvents 100 \
-  --outputFile ALLEGRO_sim_kaon0L.root \
+  --outputFile $RUNSDIR/sim/kaon0L_50GeV_theta60/ALLEGRO_sim.root \
   --random.enableEventSeed --random.seed 42 \
   --compactFile $ALLEGRO_COMPACT
 
-# Electrons — 10 GeV at theta=60 deg
+mkdir -p $RUNSDIR/sim/electron_10GeV_theta60
 ddsim --enableGun --gun.distribution uniform \
   --gun.energy "10*GeV" \
   --gun.thetaMin "60*deg" --gun.thetaMax "60*deg" \
   --gun.particle e- \
   --numberOfEvents 100 \
-  --outputFile ALLEGRO_sim_electron.root \
+  --outputFile $RUNSDIR/sim/electron_10GeV_theta60/ALLEGRO_sim.root \
   --random.enableEventSeed --random.seed 42 \
   --compactFile $ALLEGRO_COMPACT
 
-# Pions — 50 GeV at theta=60 deg
+mkdir -p $RUNSDIR/sim/pion_50GeV_theta60
 ddsim --enableGun --gun.distribution uniform \
   --gun.energy "50*GeV" \
   --gun.thetaMin "60*deg" --gun.thetaMax "60*deg" \
   --gun.particle pi- \
   --numberOfEvents 100 \
-  --outputFile ALLEGRO_sim_pi.root \
+  --outputFile $RUNSDIR/sim/pion_50GeV_theta60/ALLEGRO_sim.root \
   --random.enableEventSeed --random.seed 42 \
   --compactFile $ALLEGRO_COMPACT
 ```
@@ -165,20 +195,37 @@ ddsim --enableGun --gun.distribution uniform \
 ## 4. Running the reconstruction
 
 ```bash
-k4run ALLEGROReconstruction.py --inputFiles ALLEGRO_sim_photon.root   --outputFile ALLEGRO_reco_photon.root
-k4run ALLEGROReconstruction.py --inputFiles ALLEGRO_sim_kaon0L.root   --outputFile ALLEGRO_reco_kaon0L.root
-k4run ALLEGROReconstruction.py --inputFiles ALLEGRO_sim_electron.root --outputFile ALLEGRO_reco_electron.root
-k4run ALLEGROReconstruction.py --inputFiles ALLEGRO_sim_pi.root       --outputFile ALLEGRO_reco_pi.root
+cd $WORKDIR/ALLEGRO_PandoraPFA
+
+mkdir -p $RUNSDIR/reco/photon_10GeV_theta60
+k4run ALLEGROReconstruction.py \
+  --inputFiles $RUNSDIR/sim/photon_10GeV_theta60/ALLEGRO_sim.root \
+  --outputFile $RUNSDIR/reco/photon_10GeV_theta60/ALLEGRO_reco.root
+
+mkdir -p $RUNSDIR/reco/kaon0L_50GeV_theta60
+k4run ALLEGROReconstruction.py \
+  --inputFiles $RUNSDIR/sim/kaon0L_50GeV_theta60/ALLEGRO_sim.root \
+  --outputFile $RUNSDIR/reco/kaon0L_50GeV_theta60/ALLEGRO_reco.root
+
+mkdir -p $RUNSDIR/reco/electron_10GeV_theta60
+k4run ALLEGROReconstruction.py \
+  --inputFiles $RUNSDIR/sim/electron_10GeV_theta60/ALLEGRO_sim.root \
+  --outputFile $RUNSDIR/reco/electron_10GeV_theta60/ALLEGRO_reco.root
+
+mkdir -p $RUNSDIR/reco/pion_50GeV_theta60
+k4run ALLEGROReconstruction.py \
+  --inputFiles $RUNSDIR/sim/pion_50GeV_theta60/ALLEGRO_sim.root \
+  --outputFile $RUNSDIR/reco/pion_50GeV_theta60/ALLEGRO_reco.root
 ```
 
 Inspect output collections:
 ```bash
-podio-dump ALLEGRO_reco_kaon0L.root
+podio-dump $RUNSDIR/reco/kaon0L_50GeV_theta60/ALLEGRO_reco.root
 ```
 
 Quick check in ROOT:
 ```bash
-root -l ALLEGRO_reco_kaon0L.root
+root -l $RUNSDIR/reco/kaon0L_50GeV_theta60/ALLEGRO_reco.root
 # Total PFO energy
 events->Draw("Sum$(PandoraPFANewPFOs.energy)","","")
 # Compare with raw calorimeter cell sum
@@ -189,8 +236,10 @@ events->Draw("Sum$(HCalBarrelReadoutPositioned.energy) + Sum$(ECalBarrelModuleTh
 
 ## Notes
 
-- Output ROOT files are large — store them on EOS (`/eos/user/r/ravinab/`)
-  rather than AFS, and do not commit them to git.
+- Output ROOT files are stored under `runs/` (git-ignored, stays on AFS).
+  If the 100GB AFS quota becomes an issue, move `runs/` to EOS at
+  `/eos/user/r/ravinab/FCC_ALLEGRO_TileCal/runs/` and update `RUNSDIR` in
+  `setup.sh`.
 - The `2026-04-08` nightly may be updated or removed. If it becomes unavailable,
   identify a replacement nightly where the full build chain compiles, update
   `KEY4HEP_RELEASE` in `setup.sh`, and rebuild.

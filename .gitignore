@@ -5,8 +5,12 @@ PandoraSDK/
 k4RecCalorimeter/
 k4RecTracker/
 k4geo/
+ALLEGRO_PandoraPFA/
 
-# ROOT output files
+# Simulation and reconstruction output
+runs/
+
+# ROOT files
 *.root
 
 # Python

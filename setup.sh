@@ -6,6 +6,7 @@
 
 # --- Configuration ---
 export WORKDIR=/afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal
+export RUNSDIR=${WORKDIR}/runs
 export ALLEGRO_VERSION=ALLEGRO_o2_v01   # change here if geometry version changes
 export KEY4HEP_RELEASE=2026-04-08
 
@@ -27,3 +28,4 @@ echo "Environment ready."
 echo "  Key4hep release : ${KEY4HEP_RELEASE}"
 echo "  ALLEGRO geometry: ${ALLEGRO_VERSION}"
 echo "  Compact file    : ${ALLEGRO_COMPACT}"
+echo "  Runs directory  : ${RUNSDIR}"
