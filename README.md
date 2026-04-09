@@ -188,7 +188,7 @@ pythia --card $WORKDIR/Pythia8/cards/p8_ee_Zuds.cmd \
   --ecm 91.188 --seed 42 --nevents 1000 --output Zuds_ecm91
 ddsim --inputFiles Zuds_ecm91.hepmc \
   --random.enableEventSeed --random.seed 42 \
-  --numberOfEvents -1 \
+  --numberOfEvents 100 \
   --outputFile ALLEGRO_sim_Zuds_ecm91.root \
   --compactFile $ALLEGRO_COMPACT
 ```
