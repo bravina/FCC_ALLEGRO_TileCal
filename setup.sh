@@ -41,9 +41,13 @@ export LD_LIBRARY_PATH=${PWD}/install/lib64:$LD_LIBRARY_PATH
 export PATH=${PATH}:${PWD}/scripts
 cd ${WORKDIR}
 
+cd ${WORKDIR}/Pythia8
+export PATH=${PATH}:${PWD}/bin
+cd ${WORKDIR}
+
 # --- Convenience ---
 export ALLEGRO_COMPACT=${K4GEO}/FCCee/ALLEGRO/compact/${ALLEGRO_VERSION}/${ALLEGRO_VERSION}.xml
-export RUNDIR=${WORKDIR}/ALLEGRO_PandoraPFA/run   # directory with reco config and auxiliary files
+export RUNDIR=${WORKDIR}/ALLEGRO_PandoraPFA/run   # reco steering file + auxiliary files
 
 echo "Environment ready."
 echo "  Key4hep release : latest nightly"
