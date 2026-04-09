@@ -72,7 +72,7 @@ git clone https://github.com/bravina/k4RecTracker.git
 git clone https://github.com/bravina/PandoraSDK.git
 git clone https://github.com/bravina/LCContent.git
 git clone https://github.com/bravina/DDMarlinPandora.git
-git clone https://github.com/Archil-AD/ALLEGRO_PandoraPFA.git
+git clone https://github.com/bravina/ALLEGRO_PandoraPFA.git
 
 # PandoraCMakeSettings module (from 2026-02-26 nightly, not present in 2026-04-08)
 export PANDORA_CMAKE_MODULE_PATH=/cvmfs/sw-nightlies.hsf.org/key4hep/releases/2026-02-26/x86_64-almalinux9-gcc14.2.0-opt/pandorapfa/4.11.2-tyvaev/cmakemodules
