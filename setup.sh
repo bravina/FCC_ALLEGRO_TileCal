@@ -5,7 +5,7 @@
 # Assumes all dependency repos have already been compiled (see compile.sh and README).
 
 # --- Configuration ---
-export WORKDIR=/afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/FCC_ALLEGRO_TileCal
+export WORKDIR=/afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal
 export RUNSDIR=${WORKDIR}/runs
 export ALLEGRO_VERSION=ALLEGRO_o1_v03   # change here if geometry version changes
 

@@ -14,7 +14,7 @@ rm -rf build install && mkdir build install
 cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install \
   -DCMAKE_MODULE_PATH=${PANDORA_CMAKE_MODULE_PATH}
-make install -j8
+make install -j16
 cd ..
 k4_local_repo
 cd ${WORKDIR}
@@ -23,7 +23,7 @@ cd ${WORKDIR}/k4geo
 rm -rf build install && mkdir build install
 cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install
-make install -j8
+make install -j16
 cd ..
 k4_local_repo
 export K4GEO=${PWD}/
@@ -33,7 +33,7 @@ cd ${WORKDIR}/k4RecTracker
 rm -rf build install && mkdir build install
 cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install
-make install -j8
+make install -j16
 cd ..
 k4_local_repo
 cd ${WORKDIR}
@@ -43,7 +43,7 @@ rm -rf build install && mkdir build install
 cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install \
   -DCMAKE_MODULE_PATH=${PANDORA_CMAKE_MODULE_PATH}
-make install -j8
+make install -j16
 cd ..
 k4_local_repo
 cd ${WORKDIR}
@@ -53,7 +53,7 @@ rm -rf build install && mkdir build install
 cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install \
   -DCMAKE_MODULE_PATH=${PANDORA_CMAKE_MODULE_PATH}
-make install -j8
+make install -j16
 cd ..
 k4_local_repo
 cd ${WORKDIR}
@@ -62,7 +62,7 @@ cd ${WORKDIR}/CaloNtupleizer
 rm -rf build install && mkdir build install
 cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install
-make install -j8
+make install -j16
 cd ..
 cd ${WORKDIR}
 
