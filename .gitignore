@@ -12,6 +12,7 @@ runs/
 
 # ROOT files
 *.root
+ravinab.cc # ROOT ACLiC?
 
 # Python
 __pycache__/
