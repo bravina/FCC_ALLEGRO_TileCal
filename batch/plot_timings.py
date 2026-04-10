@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-plot_timings.py  -  Parse HTCondor job .out files and plot simulation and
+plot_timings.py  —  Parse HTCondor job .out files and plot simulation and
 reconstruction timings per sample.
 
 Usage:
@@ -48,7 +48,7 @@ RE_RECO_TOTAL = re.compile(
 
 def parse_sim_out(path: Path) -> dict | None:
     """Extract sim timing from a single .out file. Returns None if not found."""
-    text = path.read_text(errors="replace")
+    text = tail_bytes(path)
     m_total = RE_SIM_TOTAL.search(text)
     m_per_event = RE_SIM_PER_EVENT.search(text)
     if not m_total:
@@ -59,10 +59,20 @@ def parse_sim_out(path: Path) -> dict | None:
     }
 
 
+def tail_bytes(path: Path, n_bytes: int = 8192) -> str:
+    """Read the last n_bytes of a file without loading it all into memory."""
+    with path.open("rb") as f:
+        f.seek(0, 2)  # seek to end
+        size = f.tell()
+        f.seek(max(0, size - n_bytes))
+        return f.read().decode(errors="replace")
+
+
 def parse_reco_out(path: Path) -> dict | None:
-    """Extract reco total user time from a single .out file."""
-    text = path.read_text(errors="replace")
-    # The last match is the overall ChronoStatSvc total
+    """Extract reco total user time from a single .out file.
+    Reads only the last 8 KB to avoid loading the full ~40 MB file.
+    """
+    text = tail_bytes(path)
     matches = RE_RECO_TOTAL.findall(text)
     if not matches:
         return None
