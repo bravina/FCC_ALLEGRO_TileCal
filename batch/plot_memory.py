@@ -143,13 +143,13 @@ def plot_memory(all_memory: dict[str, dict], output: str) -> None:
             ax.set_visible(True)
 
             records = all_memory[tag][step_label.lower()]
-            usage   = [rec["usage_mb"]   / 1024 for rec in records]  # GB
-            request = records[0]["request_mb"]   / 1024 if records else None
+            usage   = [rec["usage_mb"]   for rec in records]  # MB
+            request = records[0]["request_mb"] if records else None
 
             colour = COLOURS[(idx + colour_offset) % len(COLOURS)]
             ax.hist(usage, bins=20, color=colour, alpha=0.85,
                     edgecolor="white", linewidth=0.5)
-            ax.set_xlabel("Memory usage (GB)", fontsize=10)
+            ax.set_xlabel("Memory usage (MB)", fontsize=10)
             ax.set_ylabel("Jobs", fontsize=10)
             ax.set_title(tag, fontsize=10, pad=4)
             ax.tick_params(labelsize=9)
@@ -162,12 +162,12 @@ def plot_memory(all_memory: dict[str, dict], output: str) -> None:
             # Vertical line for the requested memory
             if request is not None:
                 ax.axvline(request, color="black", linestyle="--",
-                           linewidth=1.0, label=f"request: {request:.1f} GB")
+                           linewidth=1.0, label=f"request: {int(request)} MB")
                 ax.legend(fontsize=8)
 
             ax.text(
                 0.97, 0.95,
-                f"mean: {mean_u:.2f} ± {std_u:.2f} GB\nmax: {max_u:.2f} GB",
+                f"mean: {mean_u:.0f} ± {std_u:.0f} MB\nmax: {max_u:.0f} MB",
                 transform=ax.transAxes,
                 ha="right", va="top", fontsize=9,
                 bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=colour, alpha=0.8),
@@ -186,19 +186,19 @@ def plot_memory(all_memory: dict[str, dict], output: str) -> None:
 
     # Summary table
     print()
-    print(f"{'Tag':<30}  {'Step':<5}  {'N':>5}  {'Mean (GB)':>10}  "
-          f"{'Std (GB)':>9}  {'Max (GB)':>9}  {'Request (GB)':>13}")
+    print(f"{'Tag':<30}  {'Step':<5}  {'N':>5}  {'Mean (MB)':>10}  "
+          f"{'Std (MB)':>9}  {'Max (MB)':>9}  {'Request (MB)':>13}")
     print("-" * 85)
     for tag in sorted(all_memory):
         for step in ("sim", "reco"):
             records = all_memory[tag].get(step, [])
             if not records:
                 continue
-            usage   = [r["usage_mb"] / 1024 for r in records]
-            request = records[0]["request_mb"] / 1024
+            usage   = [r["usage_mb"] for r in records]
+            request = records[0]["request_mb"]
             print(f"{tag:<30}  {step:<5}  {len(records):>5}  "
-                  f"{np.mean(usage):>10.2f}  {np.std(usage):>9.2f}  "
-                  f"{np.max(usage):>9.2f}  {request:>13.1f}")
+                  f"{np.mean(usage):>10.0f}  {np.std(usage):>9.0f}  "
+                  f"{np.max(usage):>9.0f}  {request:>13}")
 
 
 # ---------------------------------------------------------------------------
