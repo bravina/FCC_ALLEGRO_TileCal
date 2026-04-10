@@ -27,3 +27,6 @@ install/
 # Editor
 .vscode/
 *.swp
+
+# Binaries
+Pythia8/bin/*
