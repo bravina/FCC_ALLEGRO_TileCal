@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-plot_timings.py  —  Parse HTCondor job .out files and plot simulation and
+plot_timings.py  -  Parse HTCondor job .out files and plot simulation and
 reconstruction timings per sample.
 
 Usage:
@@ -77,16 +77,26 @@ def collect_timings(submitdir: Path, tag: str) -> dict:
     if not log_dir.exists():
         return result
 
-    for out_file in sorted(log_dir.glob("sim_*.out")):
-        # .out files may be named sim_<tag>_<N>.<ClusterId>.<ProcId>.out
+    sim_files  = sorted(log_dir.glob("sim_*.out"))
+    reco_files = sorted(log_dir.glob("reco_*.out"))
+    n_sim  = len(sim_files)
+    n_reco = len(reco_files)
+
+    for i, out_file in enumerate(sim_files):
+        print(f"  [{tag}] sim  {i+1}/{n_sim} ", end="\r", flush=True)
         t = parse_sim_out(out_file)
         if t:
             result["sim"].append(t)
+    if n_sim:
+        print(f"  [{tag}] sim  {n_sim}/{n_sim} — {len(result['sim'])} with timing data{' '*20}")
 
-    for out_file in sorted(log_dir.glob("reco_*.out")):
+    for i, out_file in enumerate(reco_files):
+        print(f"  [{tag}] reco {i+1}/{n_reco} ", end="\r", flush=True)
         t = parse_reco_out(out_file)
         if t:
             result["reco"].append(t)
+    if n_reco:
+        print(f"  [{tag}] reco {n_reco}/{n_reco} — {len(result['reco'])} with timing data{' '*20}")
 
     return result
 
@@ -219,7 +229,6 @@ def plot_timings(all_timings: dict[str, dict], output: str) -> None:
             totals = [d["total_s"] / 60 for d in data]
             mean_t = np.mean(totals)
             std_t  = np.std(totals)
-            # per-event only available for sim
             if step == "sim":
                 per_ev = [d["per_event_s"] for d in data if d["per_event_s"]]
                 pe_str = f"{np.mean(per_ev):.1f}" if per_ev else "—"
@@ -257,6 +266,7 @@ def main() -> None:
     if args.sample:
         tags = [t for t in tags if args.sample in t]
 
+    print(f"Scanning {len(tags)} sample(s) in {submitdir}/logs/ ...")
     all_timings = {}
     for t in tags:
         timings = collect_timings(submitdir, t)
