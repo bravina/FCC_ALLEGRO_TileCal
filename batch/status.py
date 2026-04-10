@@ -150,9 +150,9 @@ def print_tag_status(tag: str, states: dict[str, dict],
     for job_name, info in states.items():
         by_step[step_of(job_name)].append((job_name, info))
 
-    print(f"\n  {'Step':<8}  {'Done':>5}  {'Run':>5}  {'Fail':>5}  "
-          f"{'Held':>5}  {'Idle':>5}  {'Total':>5}  Progress")
-    print("  " + "-" * 80)
+    print(f"  {'Step':<8}  {'Done':>6}  {'Run':>6}  {'Fail':>6}  "
+          f"{'Held':>6}  {'Idle':>6}  {'Total':>6}  Progress")
+    print("  " + "-" * 85)
 
     any_failed = False
     for step in STEP_ORDER:
@@ -184,9 +184,13 @@ def print_tag_status(tag: str, states: dict[str, dict],
         else:
             step_state = "idle"
 
-        print(f"  {colour(step, step_state):<8}  "
-              f"{done:>5}  {running:>5}  {failed:>5}  "
-              f"{held:>5}  {idle:>5}  {total:>5}  {bar}")
+        # Use a fixed-width placeholder for the coloured step name
+        # (ANSI codes add invisible characters that confuse f-string alignment)
+        step_coloured = colour(step, step_state)
+        padding = " " * (8 - len(step))
+        print(f"  {step_coloured}{padding}  "
+              f"{done:>6}  {running:>6}  {failed:>6}  "
+              f"{held:>6}  {idle:>6}  {total:>6}  {bar}")
 
         if show_failed and failed_names:
             any_failed = True
