@@ -34,6 +34,7 @@ FCC_ALLEGRO_TileCal/           # this git repository
     batch/                     # HTCondor batch workflow (see Section 8)
         config.yaml            # single configuration file for all samples and steps
         submit.py              # orchestration script
+        status.py              # pipeline status viewer
         requirements.txt       # Python dependencies (pyyaml, jinja2)
         templates/             # Jinja2 job script and submit file templates
     runs/                      # simulation and reconstruction output (git-ignored)
@@ -445,6 +446,43 @@ For energy scan samples each ECM point is a separate subdirectory, e.g.
 `ttbar_scan_1GeV_ecm330/`, `ttbar_scan_1GeV_ecm331/`, etc.
 
 ### Monitoring jobs
+
+For a per-step breakdown of the pipeline, use `batch/status.py`. It parses
+the HTCondor log files written to `batch/jobs/logs/` in real time and shows
+how many jobs in each step are idle, running, done, or failed:
+
+```bash
+# Status of all samples that have started running
+python batch/status.py --config batch/config.yaml
+
+# Filter to a single sample or ECM point
+python batch/status.py --config batch/config.yaml --sample ttbar_ecm365
+
+# Also print the names and exit codes of any failed jobs
+python batch/status.py --config batch/config.yaml --failed
+```
+
+Example output:
+
+```
+Pipeline status  —  submitdir: .../batch/jobs
+
+ttbar_ecm365  (101/203 done)
+  Step      Done    Run   Fail   Held   Idle  Total  Progress
+  --------------------------------------------------------------------------------
+  gen          1      0      0      0      0      1  [██████████████████████████████]
+  sim        100      0      0      0      0    100  [██████████████████████████████]
+  reco         0     50      0      0     50    100  [▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶···············]
+  merge        0      0      0      0      1      1  [······························]
+  ntuple       0      0      0      0      1      1  [······························]
+```
+
+Unlike `condor_q`, `status.py` works by reading the log files directly so it
+reflects the current state even for jobs that have already finished and left
+the queue. Samples with no log files yet (not yet submitted) are silently
+skipped unless explicitly requested with `--sample`.
+
+For a higher-level view of the HTCondor queue:
 
 ```bash
 # Overview of all running/idle/held jobs
