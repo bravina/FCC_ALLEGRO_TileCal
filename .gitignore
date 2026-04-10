@@ -30,3 +30,6 @@ install/
 
 # Binaries
 Pythia8/bin/*
+
+# HTCondor logs
+batch/jobs

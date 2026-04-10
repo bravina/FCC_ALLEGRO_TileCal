@@ -1,0 +1,176 @@
+# =============================================================================
+# FCC ALLEGRO batch workflow configuration
+# =============================================================================
+# Usage:
+#   python batch/submit.py --config batch/config.yaml --steps gen sim reco merge ntuple
+#   python batch/submit.py --config batch/config.yaml --steps sim reco  # skip gen
+#   python batch/submit.py --config batch/config.yaml --dry-run         # generate files only
+#
+# Steps available: gen, sim, reco, merge, ntuple
+# When multiple steps are given they are chained via HTCondor DAGMan.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
+paths:
+  # Top-level working directory (source code, scripts, configs)
+  workdir: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal
+
+  # Where simulation/reconstruction output lands (EOS recommended for large files)
+  runsdir: /eos/user/r/ravinab/FCC_ALLEGRO_TileCal/runs
+
+  # DAG and submit files are written here (should be on AFS, not EOS)
+  submitdir: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/batch/jobs
+
+  # ALLEGRO geometry version
+  allegro_version: ALLEGRO_o1_v03
+
+  # Key4hep nightly to source. Use "latest" for the rolling nightly, or pin a date.
+  # Example pinned: /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh -r 2026-04-08
+  key4hep_setup: latest   # "latest" -> sources without -r flag
+
+  # Pandora settings XML (relative to ALLEGRO_PandoraPFA/run/, or absolute path)
+  pandora_settings: PandoraSettings_v6.xml
+
+# -----------------------------------------------------------------------------
+# Package locations
+# Two mutually exclusive modes per package:
+#   local_path: /absolute/path   -> use pre-compiled installation
+#   git: {url: ..., branch: ...} -> clone + compile via setup script
+#
+# Run  `python batch/submit.py --setup`  to generate the setup/compile scripts
+# and follow the printed instructions before submitting any jobs.
+# -----------------------------------------------------------------------------
+packages:
+  k4geo:
+    git:
+      url: https://github.com/bravina/k4geo.git
+      branch: hcal-new-geometry
+
+  k4RecTracker:
+    git:
+      url: https://github.com/bravina/k4RecTracker.git
+      branch: pandora
+
+  PandoraSDK:
+    git:
+      url: https://github.com/giovannimarchiori/PandoraSDK.git
+      branch: master
+
+  LCContent:
+    git:
+      url: https://github.com/bravina/LCContent.git
+      branch: ALLEGRO
+
+  DDMarlinPandora:
+    git:
+      url: https://github.com/bravina/DDMarlinPandora.git
+      branch: test-hcal-cell-dimensions
+
+  CaloNtupleizer:
+    git:
+      url: https://github.com/bravina/CaloNtupleizer.git
+      branch: main
+
+  Pythia8:
+    git:
+      url: https://github.com/bravina/Pythia8.git
+      branch: main
+
+  ALLEGRO_PandoraPFA:
+    git:
+      url: https://github.com/bravina/ALLEGRO_PandoraPFA.git
+      branch: main
+
+# -----------------------------------------------------------------------------
+# Workflow settings (per step)
+# -----------------------------------------------------------------------------
+workflow:
+  gen:
+    enabled: true
+    events_per_job: 10000      # events generated per Pythia8 job
+    job_flavour: longlunch     # HTCondor flavour (~2h); see https://batchdocs.web.cern.ch
+
+  sim:
+    enabled: true
+    events_per_job: 100        # ddsim --numberOfEvents per job
+    job_flavour: longlunch
+
+  reco:
+    enabled: true
+    events_per_job: 100        # k4run events per job
+    job_flavour: longlunch
+
+  merge:
+    enabled: true
+    events_per_merged_file: 10000   # hadd target: how many reco events per output file
+    job_flavour: longlunch
+
+  ntuple:
+    enabled: true
+    job_flavour: longlunch
+
+# -----------------------------------------------------------------------------
+# Samples
+# Each entry defines one physics sample.
+#
+# Fields:
+#   name        : unique label used for directory names and file names
+#   card        : Pythia8 card path, relative to workdir or absolute
+#   ecm         : list of centre-of-mass energies in GeV
+#                 (each becomes a separate sub-sample, e.g. ttbar_ecm365)
+#   base_seed   : starting random seed; job i gets seed = base_seed + i
+#   total_events: total events to generate across all jobs
+#
+# The Pythia8 cards shipped with this repo:
+#   Pythia8/cards/p8_ee_ttbar.cmd   ttbar, default 365 GeV
+#   Pythia8/cards/p8_ee_WW.cmd      W+W-, default 240 GeV
+#   Pythia8/cards/p8_ee_ZZ.cmd      ZZ,   default 240 GeV
+#   Pythia8/cards/p8_ee_Zuds.cmd    Z->uds dijets, default 91.188 GeV
+# -----------------------------------------------------------------------------
+samples:
+
+  - name: ttbar
+    card: Pythia8/cards/p8_ee_ttbar.cmd
+    base_seed: 1000
+    total_events: 10000
+    ecm:
+      - 365
+
+  - name: WW
+    card: Pythia8/cards/p8_ee_WW.cmd
+    base_seed: 2000
+    total_events: 10000
+    ecm:
+      - 240
+
+  # Energy scan: ttbar threshold region
+  # 330 to 350 GeV in steps of 1 GeV
+  - name: ttbar_scan_1GeV
+    card: Pythia8/cards/p8_ee_ttbar.cmd
+    base_seed: 3000
+    total_events: 10000
+    ecm: [330, 331, 332, 333, 334, 335, 336, 337, 338, 339,
+          340, 341, 342, 343, 344, 345, 346, 347, 348, 349, 350]
+
+  # 350 to 365 GeV in steps of 5 GeV
+  - name: ttbar_scan_5GeV
+    card: Pythia8/cards/p8_ee_ttbar.cmd
+    base_seed: 4000
+    total_events: 10000
+    ecm: [350, 355, 360, 365]
+
+  # Energy scan: WW
+  - name: WW_scan_1GeV
+    card: Pythia8/cards/p8_ee_WW.cmd
+    base_seed: 5000
+    total_events: 10000
+    ecm: [330, 331, 332, 333, 334, 335, 336, 337, 338, 339,
+          340, 341, 342, 343, 344, 345, 346, 347, 348, 349, 350]
+
+  - name: WW_scan_5GeV
+    card: Pythia8/cards/p8_ee_WW.cmd
+    base_seed: 6000
+    total_events: 10000
+    ecm: [350, 355, 360, 365]
