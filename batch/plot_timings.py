@@ -44,6 +44,10 @@ RE_SIM_PER_EVENT = re.compile(
 RE_RECO_TOTAL = re.compile(
     r"ChronoStatSvc\s+INFO\s+Time User\s+:\s+Tot=\s*([\d.]+)\s+\[s\]"
 )
+# EventCounter      INFO Processed 50 events
+RE_RECO_NEVENTS = re.compile(
+    r"EventCounter\s+INFO\s+Processed\s+(\d+)\s+events"
+)
 
 
 def parse_sim_out(path: Path) -> dict | None:
@@ -69,7 +73,7 @@ def tail_bytes(path: Path, n_bytes: int = 8192) -> str:
 
 
 def parse_reco_out(path: Path) -> dict | None:
-    """Extract reco total user time from a single .out file.
+    """Extract reco total user time and event count from a single .out file.
     Reads only the last 8 KB to avoid loading the full ~40 MB file.
     """
     text = tail_bytes(path)
@@ -77,7 +81,10 @@ def parse_reco_out(path: Path) -> dict | None:
     if not matches:
         return None
     total_s = float(matches[-1])
-    return {"total_s": total_s}
+    m_nev = RE_RECO_NEVENTS.search(text)
+    n_events = int(m_nev.group(1)) if m_nev else None
+    per_event_s = total_s / n_events if n_events else None
+    return {"total_s": total_s, "n_events": n_events, "per_event_s": per_event_s}
 
 
 def collect_timings(submitdir: Path, tag: str) -> dict:
@@ -215,9 +222,16 @@ def plot_timings(all_timings: dict[str, dict], output: str) -> None:
 
             mean_t = np.mean(totals)
             std_t  = np.std(totals)
+            per_ev = [d["per_event_s"] for d in data if d.get("per_event_s") is not None]
+            if per_ev:
+                mean_pe = np.mean(per_ev)
+                std_pe  = np.std(per_ev)
+                label = f"{mean_pe:.2f} ± {std_pe:.2f} s/event"
+            else:
+                label = f"{mean_t:.1f} ± {std_t:.1f} min/job"
             ax.text(
                 0.97, 0.95,
-                f"{mean_t:.1f} ± {std_t:.1f} min/job",
+                label,
                 transform=ax.transAxes,
                 ha="right", va="top", fontsize=9,
                 bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=colour, alpha=0.8),
@@ -239,11 +253,8 @@ def plot_timings(all_timings: dict[str, dict], output: str) -> None:
             totals = [d["total_s"] / 60 for d in data]
             mean_t = np.mean(totals)
             std_t  = np.std(totals)
-            if step == "sim":
-                per_ev = [d["per_event_s"] for d in data if d["per_event_s"]]
-                pe_str = f"{np.mean(per_ev):.1f}" if per_ev else "—"
-            else:
-                pe_str = "—"
+            per_ev = [d["per_event_s"] for d in data if d.get("per_event_s") is not None]
+            pe_str = f"{np.mean(per_ev):.2f}" if per_ev else "—"
             print(f"{tag:<30}  {step:<5}  {len(data):>5}  {mean_t:>10.1f}  {std_t:>9.1f}  {pe_str:>8}")
 
 
