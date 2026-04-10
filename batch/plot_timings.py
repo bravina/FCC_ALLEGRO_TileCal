@@ -52,7 +52,7 @@ RE_RECO_NEVENTS = re.compile(
 
 def parse_sim_out(path: Path) -> dict | None:
     """Extract sim timing from a single .out file. Returns None if not found."""
-    text = tail_bytes(path)
+    text = tail_bytes(path, n_bytes=1024*3)
     m_total = RE_SIM_TOTAL.search(text)
     m_per_event = RE_SIM_PER_EVENT.search(text)
     if not m_total:
