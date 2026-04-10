@@ -6,7 +6,6 @@ k4RecCalorimeter/
 k4RecTracker/
 k4geo/
 ALLEGRO_PandoraPFA/
-CaloNtupleizer/
 
 # Simulation and reconstruction output
 runs/

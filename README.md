@@ -50,7 +50,6 @@ FCC_ALLEGRO_TileCal/           # this git repository
 | `PandoraSDK` | `giovannimarchiori/PandoraSDK` | `master` |
 | `LCContent` | `bravina/LCContent` | `ALLEGRO` |
 | `DDMarlinPandora` | `bravina/DDMarlinPandora` | `test-hcal-cell-dimensions` |
-| `CaloNtupleizer` | `bravina/CaloNtupleizer` | `main` |
 | `Pythia8` | `bravina/Pythia8` | `main` |
 | `ALLEGRO_PandoraPFA` | `bravina/ALLEGRO_PandoraPFA` | `main` |
 
@@ -77,7 +76,6 @@ git clone https://github.com/bravina/k4RecTracker.git && cd k4RecTracker && git 
 git clone https://github.com/giovannimarchiori/PandoraSDK.git
 git clone https://github.com/bravina/LCContent.git && cd LCContent && git checkout ALLEGRO && cd ..
 git clone https://github.com/bravina/DDMarlinPandora.git && cd DDMarlinPandora && git checkout test-hcal-cell-dimensions && cd ..
-git clone https://github.com/bravina/CaloNtupleizer.git
 git clone https://github.com/bravina/Pythia8.git
 git clone https://github.com/bravina/ALLEGRO_PandoraPFA.git
 
