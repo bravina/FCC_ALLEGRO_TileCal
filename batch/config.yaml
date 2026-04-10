@@ -101,30 +101,35 @@ workflow:
     enabled: true
     events_per_job: 10000      # events generated per Pythia8 job
     job_flavour: longlunch     # HTCondor flavour (~2h); see https://batchdocs.web.cern.ch
-    request_memory_mb: 2000    # MB; Pythia8 is lightweight
+    request_memory: 2GB
+    retry_request_memory: 4GB
 
   sim:
     enabled: true
     events_per_job: 100        # ddsim --numberOfEvents per job
     job_flavour: longlunch
-    request_memory_mb: 8000    # MB; ddsim needs ~6 GB, request with headroom
+    request_memory: 8GB
+    retry_request_memory: 12GB
 
   reco:
     enabled: true
     events_per_job: 100        # k4run events per job
     job_flavour: longlunch
-    request_memory_mb: 4000    # MB
+    request_memory: 4GB
+    retry_request_memory: 8GB
 
   merge:
     enabled: true
     events_per_merged_file: 10000   # hadd target: how many reco events per output file
     job_flavour: longlunch
-    request_memory_mb: 2000    # MB; hadd is I/O bound, not memory hungry
+    request_memory: 2GB
+    retry_request_memory: 4GB
 
   ntuple:
     enabled: true
     job_flavour: longlunch
-    request_memory_mb: 4000    # MB
+    request_memory: 4GB
+    retry_request_memory: 8GB
 
 # -----------------------------------------------------------------------------
 # Samples
