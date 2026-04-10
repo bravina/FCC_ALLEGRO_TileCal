@@ -307,7 +307,7 @@ def make_gen_jobs(sample: dict, ecm: float, cfg: dict,
         sub_content = render(
             jinja_env, "condor.sub.j2",
             job_name=job_name, script=script_path,
-            log_dir=log_dir, job_flavour=wf["job_flavour"],
+            log_dir=log_dir, job_flavour=wf["job_flavour"], request_memory_mb=wf["request_memory_mb"],
         )
         sub_path = submitdir / "condor" / f"{job_name}.sub"
         write_file(sub_path, sub_content)
@@ -361,7 +361,7 @@ def make_sim_jobs(sample: dict, ecm: float, cfg: dict,
             sub_content = render(
                 jinja_env, "condor.sub.j2",
                 job_name=job_name, script=script_path,
-                log_dir=log_dir, job_flavour=wf_sim["job_flavour"],
+                log_dir=log_dir, job_flavour=wf_sim["job_flavour"], request_memory_mb=wf_sim["request_memory_mb"],
             )
             sub_path = submitdir / "condor" / f"{job_name}.sub"
             write_file(sub_path, sub_content)
@@ -406,7 +406,7 @@ def make_reco_jobs(sample: dict, ecm: float, cfg: dict,
         sub_content = render(
             jinja_env, "condor.sub.j2",
             job_name=job_name, script=script_path,
-            log_dir=log_dir, job_flavour=wf["job_flavour"],
+            log_dir=log_dir, job_flavour=wf["job_flavour"], request_memory_mb=wf["request_memory_mb"],
         )
         sub_path = submitdir / "condor" / f"{job_name}.sub"
         write_file(sub_path, sub_content)
@@ -456,7 +456,7 @@ def make_merge_jobs(sample: dict, ecm: float, cfg: dict,
         sub_content = render(
             jinja_env, "condor.sub.j2",
             job_name=job_name, script=script_path,
-            log_dir=log_dir, job_flavour=wf["job_flavour"],
+            log_dir=log_dir, job_flavour=wf["job_flavour"], request_memory_mb=wf["request_memory_mb"],
         )
         sub_path = submitdir / "condor" / f"{job_name}.sub"
         write_file(sub_path, sub_content)
@@ -499,7 +499,7 @@ def make_ntuple_job(sample: dict, ecm: float, cfg: dict,
     sub_content = render(
         jinja_env, "condor.sub.j2",
         job_name=job_name, script=script_path,
-        log_dir=log_dir, job_flavour=wf["job_flavour"],
+        log_dir=log_dir, job_flavour=wf["job_flavour"], request_memory_mb=wf["request_memory_mb"],
     )
     sub_path = submitdir / "condor" / f"{job_name}.sub"
     write_file(sub_path, sub_content)
