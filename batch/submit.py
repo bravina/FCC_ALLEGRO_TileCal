@@ -381,19 +381,28 @@ def make_reco_jobs(sample: dict, ecm: float, cfg: dict,
                    submitdir: Path, jinja_env: Environment,
                    env_ctx: dict, sim_nodes: list[dict]) -> list[dict]:
     paths = cfg["paths"]
-    wf = cfg["workflow"]["reco"]
+    wf_reco = cfg["workflow"]["reco"]
+    wf_sim  = cfg["workflow"]["sim"]
     tag = sample_tag(sample["name"], ecm)
 
+    # Group sim files so each reco job processes events_per_job events.
+    # Since each sim file contains sim.events_per_job events, the number
+    # of sim files per reco job is reco.events_per_job / sim.events_per_job.
+    sim_per_reco = max(1, wf_reco["events_per_job"] // wf_sim["events_per_job"])
+    chunks = [sim_nodes[i:i + sim_per_reco]
+              for i in range(0, len(sim_nodes), sim_per_reco)]
+
     nodes = []
-    for i, sim_node in enumerate(sim_nodes):
+    for i, chunk in enumerate(chunks):
         job_name = f"reco_{tag}_{i:04d}"
         output_dir = f"{paths['runsdir']}/reco/{tag}"
         output_file = f"reco_{tag}_{i:04d}.root"
+        sim_files = [n["output_root"] for n in chunk]
 
         script_content = render(
             jinja_env, "reco.sh.j2",
             sample_name=sample["name"], ecm=ecm, job_index=i,
-            sim_file=sim_node["output_root"],
+            sim_files=sim_files,
             output_dir=output_dir, output_file=output_file,
             **env_ctx,
         )
@@ -406,7 +415,8 @@ def make_reco_jobs(sample: dict, ecm: float, cfg: dict,
         sub_content = render(
             jinja_env, "condor.sub.j2",
             job_name=job_name, script=script_path,
-            log_dir=log_dir, job_flavour=wf["job_flavour"], request_memory_mb=wf["request_memory_mb"],
+            log_dir=log_dir, job_flavour=wf_reco["job_flavour"],
+            request_memory_mb=wf_reco["request_memory_mb"],
         )
         sub_path = submitdir / "condor" / f"{job_name}.sub"
         write_file(sub_path, sub_content)
@@ -416,7 +426,7 @@ def make_reco_jobs(sample: dict, ecm: float, cfg: dict,
             "sub": sub_path,
             "step": "reco",
             "output_root": f"{output_dir}/{output_file}",
-            "parents": [sim_node["name"]],
+            "parents": [n["name"] for n in chunk],
         })
     return nodes
 
@@ -562,12 +572,16 @@ def phantom_sim_nodes(sample: dict, ecm: float, cfg: dict) -> list[dict]:
 
 def phantom_reco_nodes(sample: dict, ecm: float, cfg: dict) -> list[dict]:
     sim_nodes = phantom_sim_nodes(sample, ecm, cfg)
+    wf_reco = cfg["workflow"]["reco"]
+    wf_sim  = cfg["workflow"]["sim"]
+    sim_per_reco = max(1, wf_reco["events_per_job"] // wf_sim["events_per_job"])
+    n_reco = math.ceil(len(sim_nodes) / sim_per_reco)
     tag = sample_tag(sample["name"], ecm)
     runsdir = cfg["paths"]["runsdir"]
     return [
         {"name": None,
          "output_root": f"{runsdir}/reco/{tag}/reco_{tag}_{i:04d}.root"}
-        for i in range(len(sim_nodes))
+        for i in range(n_reco)
     ]
 
 
