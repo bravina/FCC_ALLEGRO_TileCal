@@ -1,0 +1,21 @@
+# --- Environment (auto-generated) ---
+{% if key4hep_setup == "latest" %}
+source /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh
+{% else %}
+source /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh -r {{ key4hep_setup }}
+{% endif %}
+
+# Local package setup via k4_local_repo
+export PANDORASDK_DIR={{ pandora_sdk_dir }}
+export ALLEGRO_COMPACT={{ allegro_compact }}
+{% for d in k4_local_repo_dirs %}
+cd {{ d }} && k4_local_repo
+{% endfor %}
+
+# Re-prepend our PATH entries after k4_local_repo (which rewrites PATH)
+export PATH={{ calo_ntupleizer_scripts_dir }}:{{ pythia8_bin_dir }}:${PATH}
+
+# Extra LD_LIBRARY_PATH entries from config
+{% for p in extra_ld_paths %}
+export LD_LIBRARY_PATH={{ p }}:${LD_LIBRARY_PATH}
+{% endfor %}

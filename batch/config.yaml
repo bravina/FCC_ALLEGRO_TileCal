@@ -27,20 +27,30 @@ paths:
   allegro_version: ALLEGRO_o1_v03
 
   # Key4hep nightly to source. Use "latest" for the rolling nightly, or pin a date.
-  # Example pinned: /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh -r 2026-04-08
+  # Example pinned: 2026-04-08
   key4hep_setup: latest   # "latest" -> sources without -r flag
 
   # Pandora settings XML (relative to ALLEGRO_PandoraPFA/run/, or absolute path)
   pandora_settings: PandoraSettings_v6.xml
 
+  # Extra entries for LD_LIBRARY_PATH required by the local builds but not
+  # provided by the Key4hep nightly. Add or remove as the nightly evolves.
+  # These are injected verbatim into every job script.
+  extra_ld_library_paths:
+    - /cvmfs/sw-nightlies.hsf.org/key4hep/releases/2026-02-26/x86_64-almalinux9-gcc14.2.0-opt/xerces-c/3.3.0-kq5wkb/lib
+
 # -----------------------------------------------------------------------------
 # Package locations
 # Two mutually exclusive modes per package:
-#   local_path: /absolute/path   -> use pre-compiled installation
-#   git: {url: ..., branch: ...} -> clone + compile via setup script
+#   local_path: /absolute/path   -> use this directory directly (pre-compiled)
+#   git: {url: ..., branch: ...} -> clone into workdir/PackageName and compile
 #
-# Run  `python batch/submit.py --setup`  to generate the setup/compile scripts
-# and follow the printed instructions before submitting any jobs.
+# The resolved install path for each package is passed into every job script,
+# so changing local_path here is sufficient to point jobs at a different build.
+#
+# Run  `python batch/submit.py --config batch/config.yaml --setup`  to generate
+# a setup_and_compile.sh from the git entries below, and follow the printed
+# instructions before submitting any jobs.
 # -----------------------------------------------------------------------------
 packages:
   k4geo:
