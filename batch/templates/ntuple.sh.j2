@@ -7,8 +7,9 @@
 # --- Parameters ---
 OUTPUT_DIR={{ output_dir }}
 OUTPUT_FILE={{ output_file }}
+LOCAL_OUT="/tmp/${USER}/ntuple/${OUTPUT_FILE}"
 
-mkdir -p "${OUTPUT_DIR}"
+mkdir -p "/tmp/${USER}/ntuple"
 
 INPUT_FILES=(
 {% for f in input_files %}
@@ -18,9 +19,10 @@ INPUT_FILES=(
 
 calo-ntupleizer \
   --inputFiles  "${INPUT_FILES[@]}" \
-  --outputDir   "${OUTPUT_DIR}" \
+  --outputDir   "/tmp/${USER}/ntuple" \
   --outputFile  "${OUTPUT_FILE}" \
   -geometryFile "${ALLEGRO_COMPACT}"
 rc=$?; if [ $rc -ne 0 ]; then echo "ERROR: calo-ntupleizer failed (exit $rc)"; exit $rc; fi
 
+eos_cp "${LOCAL_OUT}" "${OUTPUT_DIR}/${OUTPUT_FILE}"
 echo "NTUPLE done: ${OUTPUT_DIR}/${OUTPUT_FILE}"

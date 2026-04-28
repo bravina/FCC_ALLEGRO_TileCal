@@ -11,17 +11,19 @@ OUTPUT_FILE={{ output_file }}
 NEVENTS={{ nevents }}
 SKIP={{ skip_events }}
 SEED={{ seed }}
+LOCAL_OUT="/tmp/${USER}/sim/${OUTPUT_FILE}"
 
-mkdir -p "${OUTPUT_DIR}"
+mkdir -p "/tmp/${USER}/sim"
 
 ddsim \
   --inputFiles     "${INPUT_FILE}" \
   --numberOfEvents "${NEVENTS}" \
   --skipNEvents    "${SKIP}" \
-  --outputFile     "${OUTPUT_DIR}/${OUTPUT_FILE}" \
+  --outputFile     "${LOCAL_OUT}" \
   --random.enableEventSeed \
   --random.seed    "${SEED}" \
   --compactFile    "${ALLEGRO_COMPACT}"
 rc=$?; if [ $rc -ne 0 ]; then echo "ERROR: ddsim failed (exit $rc)"; exit $rc; fi
 
+eos_cp "${LOCAL_OUT}" "${OUTPUT_DIR}/${OUTPUT_FILE}"
 echo "SIM done: ${OUTPUT_DIR}/${OUTPUT_FILE}"

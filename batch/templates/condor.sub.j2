@@ -2,9 +2,10 @@
 # HTCondor submit file for: {{ job_name }}
 universe                = vanilla
 executable              = {{ script }}
-output                  = {{ log_dir }}/{{ job_name }}.$(ClusterId).$(ProcId).out
-error                   = {{ log_dir }}/{{ job_name }}.$(ClusterId).$(ProcId).err
-log                     = {{ log_dir }}/{{ job_name }}.$(ClusterId).log
+output                  = {{ log_dir }}/{{ job_name }}.$(ClusterId).out
+error                   = {{ log_dir }}/{{ job_name }}.$(ClusterId).err
+log                     = {{ log_dir }}/{{ step }}_{{ tag }}.log
+initialdir              = {{ log_dir }}
 +JobFlavour             = "{{ job_flavour }}"
 request_memory          = {{ request_memory }}
 retry_request_memory    = {{ retry_request_memory }}

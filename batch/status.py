@@ -41,58 +41,71 @@ def sample_tag(name: str, ecm: float) -> str:
     return f"{name}_ecm{ecm_str}"
 
 
-def parse_log(log_path: Path) -> dict[str, dict]:
-    """Parse an HTCondor event log file.
-    Returns {job_name: {state, exit_code, host}} where state is one of:
-    idle, running, done, failed, held, evicted.
-    Job name is inferred from the log filename (one log per job).
+# Matches "Cmd: /path/to/gen_ttbar_ecm330_0000.sh" in execute event blocks
+RE_CMD = re.compile(r"Cmd:\s+\S+/(\w+)\.sh")
+# Matches proc ID from event header: "001 (12345.003.000)"
+RE_PROC = re.compile(r"^\d{3} \(\d+\.(\d+)\.\d+\)")
+
+
+def parse_shared_log(log_path: Path) -> dict[str, dict]:
+    """Parse a shared HTCondor log file (one per step per tag).
+    Returns {job_name: {state, exit_code}} for all jobs in the file.
+    Job names are extracted from the Cmd field in execute event blocks.
     """
     if not log_path.exists():
         return {}
 
-    # Log filename pattern: <job_name>.<ClusterId>.log
-    # We derive the job name from the parent directory + stem
-    stem = log_path.stem  # e.g. gen_ttbar_ecm365_0000.10169854
-    job_name = stem.rsplit(".", 1)[0]
-
-    state = "idle"
-    exit_code = None
+    # proc_id -> job_name mapping, built from execute events
+    proc_to_name: dict[str, str] = {}
+    # proc_id -> {state, exit_code}
+    proc_states: dict[str, dict] = {}
 
     text = log_path.read_text(errors="replace")
 
-    # HTCondor log events are separated by "..."
     for block in text.split("..."):
         block = block.strip()
         if not block:
             continue
 
         first_line = block.splitlines()[0] if block.splitlines() else ""
-        # Event code is the 3-digit number at the start: "005 (12345.000.000)"
-        m = re.match(r"^(\d{3})\s", first_line)
+        m = re.match(r"^(\d{3}) \(\d+\.(\d+)\.\d+\)", first_line)
         if not m:
             continue
         code = int(m.group(1))
+        proc = m.group(2)
+
+        if proc not in proc_states:
+            proc_states[proc] = {"state": "idle", "exit_code": None}
 
         if code == EVT_SUBMIT:
-            state = "idle"
+            proc_states[proc]["state"] = "idle"
         elif code == EVT_START:
-            state = "running"
+            proc_states[proc]["state"] = "running"
+            # Extract job name from Cmd line in this block
+            m_cmd = RE_CMD.search(block)
+            if m_cmd:
+                proc_to_name[proc] = m_cmd.group(1)
         elif code == EVT_HOLD:
-            state = "held"
+            proc_states[proc]["state"] = "held"
         elif code == EVT_EVICT:
-            state = "evicted"
+            proc_states[proc]["state"] = "evicted"
         elif code == EVT_ABORT:
-            state = "failed"
+            proc_states[proc]["state"] = "failed"
         elif code == EVT_TERMINATE:
-            # Check normal termination and return value
             if "Normal termination" in block:
                 m2 = re.search(r"Return value (\d+)", block)
                 exit_code = int(m2.group(1)) if m2 else 0
-                state = "done" if exit_code == 0 else "failed"
+                proc_states[proc]["state"] = "done" if exit_code == 0 else "failed"
+                proc_states[proc]["exit_code"] = exit_code
             else:
-                state = "failed"
+                proc_states[proc]["state"] = "failed"
 
-    return {job_name: {"state": state, "exit_code": exit_code}}
+    # Build result: prefer job name from Cmd, fall back to proc ID
+    result = {}
+    for proc, info in proc_states.items():
+        name = proc_to_name.get(proc, f"proc_{proc}")
+        result[name] = info
+    return result
 
 
 def collect_log_states(submitdir: Path, tag: str) -> dict[str, dict]:
@@ -102,7 +115,7 @@ def collect_log_states(submitdir: Path, tag: str) -> dict[str, dict]:
     if not log_dir.exists():
         return states
     for log_file in sorted(log_dir.glob("*.log")):
-        states.update(parse_log(log_file))
+        states.update(parse_shared_log(log_file))
     return states
 
 
@@ -211,6 +224,8 @@ def main() -> None:
                         help="Filter to a specific sample tag, e.g. ttbar_ecm365")
     parser.add_argument("--failed", action="store_true",
                         help="Also print names of failed jobs")
+    parser.add_argument("--condorq", action="store_true",
+                        help="Also show condor_q -dag output (loads lxbatch/eossubmit if submitdir is on EOS)")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -228,6 +243,17 @@ def main() -> None:
             return
 
     print(f"Pipeline status  —  submitdir: {submitdir}")
+
+    if args.condorq:
+        import subprocess
+        use_eos = str(submitdir).startswith("/eos/")
+        cmd = "module load lxbatch/eossubmit && condor_q -dag" if use_eos else "condor_q -dag"
+        result = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True)
+        if result.returncode == 0:
+            print(result.stdout)
+        else:
+            print(f"[condor_q failed] {result.stderr}")
+
     print(f"{'Tag'}")
     print("=" * 82)
 

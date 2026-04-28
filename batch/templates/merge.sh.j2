@@ -7,8 +7,9 @@
 # --- Parameters ---
 OUTPUT_DIR={{ output_dir }}
 OUTPUT_FILE={{ output_file }}
+LOCAL_OUT="/tmp/${USER}/merge/${OUTPUT_FILE}"
 
-mkdir -p "${OUTPUT_DIR}"
+mkdir -p "/tmp/${USER}/merge"
 
 INPUT_FILES=(
 {% for f in input_files %}
@@ -16,7 +17,8 @@ INPUT_FILES=(
 {% endfor %}
 )
 
-hadd -f "${OUTPUT_DIR}/${OUTPUT_FILE}" "${INPUT_FILES[@]}"
+hadd -f "${LOCAL_OUT}" "${INPUT_FILES[@]}"
 rc=$?; if [ $rc -ne 0 ]; then echo "ERROR: hadd failed (exit $rc)"; exit $rc; fi
 
+eos_cp "${LOCAL_OUT}" "${OUTPUT_DIR}/${OUTPUT_FILE}"
 echo "MERGE done: ${OUTPUT_DIR}/${OUTPUT_FILE}"

@@ -19,3 +19,25 @@ export PATH={{ calo_ntupleizer_scripts_dir }}:{{ pythia8_bin_dir }}:${PATH}
 {% for p in extra_ld_paths %}
 export LD_LIBRARY_PATH={{ p }}:${LD_LIBRARY_PATH}
 {% endfor %}
+
+# EOS xrdcp helper: copy a local file to EOS and remove the local copy
+# Usage: eos_cp local_file eos_path
+{% if eos_root_url %}
+eos_cp() {
+    local src="$1"
+    local eos_path="$2"
+    local dst="{{ eos_root_url }}${eos_path}"
+    # Create parent directory on EOS if it doesn't exist
+    xrdfs {{ eos_root_url }} mkdir -p "$(dirname "${eos_path}")"
+    xrdcp -f "${src}" "${dst}"
+    local rc=$?
+    if [ $rc -ne 0 ]; then echo "ERROR: xrdcp failed (exit $rc): ${src} -> ${dst}"; exit $rc; fi
+    rm -f "${src}"
+}
+{% else %}
+eos_cp() {
+    # No eos_root_url set — use plain mv (for AFS/local runs)
+    mkdir -p "$(dirname "$2")"
+    mv "$1" "$2"
+}
+{% endif %}

@@ -18,17 +18,27 @@ paths:
   workdir: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal
 
   # Where simulation/reconstruction output lands (EOS recommended for large files)
-  runsdir: /eos/user/r/ravinab/FCC_ALLEGRO_TileCal/runs
+  runsdir: /eos/experiment/drdcalo/tileCal/ravinab/FCC_ALLEGRO_TileCal/runs
 
-  # DAG and submit files are written here (should be on AFS, not EOS)
-  submitdir: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/batch/jobs
+  # XRootD URL prefix for EOS writes from worker nodes (which cannot use FUSE /eos mount)
+  eos_root_url: root://eosuser.cern.ch/
+
+  # All batch files (DAGs, scripts, sub files, logs) go here.
+  # Must be on EOS when using EosSubmit schedds (module load lxbatch/eossubmit).
+  # Can be on AFS for small campaigns with the default schedd.
+  submitdir: /eos/experiment/drdcalo/tileCal/ravinab//FCC_ALLEGRO_TileCal/batch/jobs
+ 
+  # scriptsdir: if set, job .sh scripts go here and .sub/DAG files go to submitdir.
+  # Leave unset (or same as submitdir) when using EosSubmit — everything on EOS.
+  # scriptsdir: /eos/experiment/drdcalo/tileCal/ravinab//FCC_ALLEGRO_TileCal/batch/scripts
+
 
   # ALLEGRO geometry version
   allegro_version: ALLEGRO_o1_v03
 
   # Key4hep nightly to source. Use "latest" for the rolling nightly, or pin a date.
-  # Example pinned: 2026-04-08
-  key4hep_setup: latest   # "latest" -> sources without -r flag
+  # Example pinned: /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh -r 2026-04-08
+  key4hep_setup: 2026-04-08   # "latest" -> sources without -r flag
 
   # Pandora settings XML (relative to ALLEGRO_PandoraPFA/run/, or absolute path)
   pandora_settings: PandoraSettings_v6.xml
@@ -54,44 +64,28 @@ paths:
 # -----------------------------------------------------------------------------
 packages:
   k4geo:
-    git:
-      url: https://github.com/bravina/k4geo.git
-      branch: hcal-new-geometry
+    local_path: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/k4geo
 
   k4RecTracker:
-    git:
-      url: https://github.com/bravina/k4RecTracker.git
-      branch: pandora
+    local_path: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/k4RecTracker
 
   PandoraSDK:
-    git:
-      url: https://github.com/giovannimarchiori/PandoraSDK.git
-      branch: master
+    local_path: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/PandoraSDK
 
   LCContent:
-    git:
-      url: https://github.com/bravina/LCContent.git
-      branch: ALLEGRO
+    local_path: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/LCContent
 
   DDMarlinPandora:
-    git:
-      url: https://github.com/bravina/DDMarlinPandora.git
-      branch: test-hcal-cell-dimensions
+    local_path: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/DDMarlinPandora
 
   CaloNtupleizer:
-    git:
-      url: https://github.com/bravina/CaloNtupleizer.git
-      branch: main
+    local_path: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/CaloNtupleizer
 
   Pythia8:
-    git:
-      url: https://github.com/bravina/Pythia8.git
-      branch: main
+    local_path: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/Pythia8
 
   ALLEGRO_PandoraPFA:
-    git:
-      url: https://github.com/bravina/ALLEGRO_PandoraPFA.git
-      branch: main
+    local_path: /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal/ALLEGRO_PandoraPFA
 
 # -----------------------------------------------------------------------------
 # Workflow settings (per step)
@@ -99,7 +93,7 @@ packages:
 workflow:
   gen:
     enabled: true
-    events_per_job: 10000      # events generated per Pythia8 job
+    events_per_job: 1000      # events generated per Pythia8 job
     job_flavour: longlunch     # HTCondor flavour (~2h); see https://batchdocs.web.cern.ch
     request_memory: 2GB
     retry_request_memory: 4GB
@@ -109,18 +103,18 @@ workflow:
     events_per_job: 100        # ddsim --numberOfEvents per job
     job_flavour: longlunch
     request_memory: 8GB
-    retry_request_memory: 12GB
+    retry_request_memory: 10GB
 
   reco:
     enabled: true
-    events_per_job: 100        # k4run events per job
+    events_per_job: 500        # k4run events per job
     job_flavour: longlunch
-    request_memory: 4GB
-    retry_request_memory: 8GB
+    request_memory: 2GB
+    retry_request_memory: 4GB
 
   merge:
     enabled: true
-    events_per_merged_file: 10000   # hadd target: how many reco events per output file
+    events_per_merged_file: 1000   # hadd target: how many reco events per output file
     job_flavour: longlunch
     request_memory: 2GB
     retry_request_memory: 4GB
@@ -129,7 +123,7 @@ workflow:
     enabled: true
     job_flavour: longlunch
     request_memory: 4GB
-    retry_request_memory: 8GB
+    retry_request_memory: 6GB
 
 # -----------------------------------------------------------------------------
 # Samples
@@ -151,46 +145,31 @@ workflow:
 # -----------------------------------------------------------------------------
 samples:
 
-  - name: ttbar
-    card: Pythia8/cards/p8_ee_ttbar.cmd
-    base_seed: 1000
-    total_events: 10000
-    ecm:
-      - 365
+  # - name: ttbar
+  #   card: Pythia8/cards/p8_ee_ttbar.cmd
+  #   base_seed: 42
+  #   total_events: 10000
+  #   ecm:
+  #     - 365
 
-  - name: WW
-    card: Pythia8/cards/p8_ee_WW.cmd
-    base_seed: 2000
-    total_events: 10000
-    ecm:
-      - 240
+  # - name: WW
+  #   card: Pythia8/cards/p8_ee_WW.cmd
+  #   base_seed: 42
+  #   total_events: 10000
+  #   ecm:
+  #     - 240
 
-  # Energy scan: ttbar threshold region
-  # 330 to 350 GeV in steps of 1 GeV
-  - name: ttbar_scan_1GeV
+  # Energy scan: ttbar
+  - name: ttbar_scan
     card: Pythia8/cards/p8_ee_ttbar.cmd
-    base_seed: 3000
-    total_events: 10000
-    ecm: [330, 331, 332, 333, 334, 335, 336, 337, 338, 339,
-          340, 341, 342, 343, 344, 345, 346, 347, 348, 349, 350]
-
-  # 350 to 365 GeV in steps of 5 GeV
-  - name: ttbar_scan_5GeV
-    card: Pythia8/cards/p8_ee_ttbar.cmd
-    base_seed: 4000
-    total_events: 10000
-    ecm: [350, 355, 360, 365]
+    base_seed: 42
+    total_events: 1000
+    ecm: [330, 332, 334, 336, 338, 340, 342, 344, 346, 348, 350, 355, 360, 365]
 
   # Energy scan: WW
-  - name: WW_scan_1GeV
+  - name: WW_scan
     card: Pythia8/cards/p8_ee_WW.cmd
-    base_seed: 5000
-    total_events: 10000
-    ecm: [330, 331, 332, 333, 334, 335, 336, 337, 338, 339,
-          340, 341, 342, 343, 344, 345, 346, 347, 348, 349, 350]
+    base_seed: 42
+    total_events: 1000
+    ecm: [330, 332, 334, 336, 338, 340, 342, 344, 346, 348, 350, 355, 360, 365]
 
-  - name: WW_scan_5GeV
-    card: Pythia8/cards/p8_ee_WW.cmd
-    base_seed: 6000
-    total_events: 10000
-    ecm: [350, 355, 360, 365]

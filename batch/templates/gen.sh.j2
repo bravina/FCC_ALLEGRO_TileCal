@@ -12,14 +12,15 @@ NEVENTS={{ nevents }}
 SEED={{ seed }}
 ECM={{ ecm }}
 
-mkdir -p "${OUTPUT_DIR}"
+mkdir -p /tmp/${USER}/gen
 
 pythia \
   --card    "${CARD}" \
   --ecm     "${ECM}" \
   --seed    "${SEED}" \
   --nevents "${NEVENTS}" \
-  --output  "${OUTPUT_DIR}/${OUTPUT_FILE}"
+  --output  "/tmp/${USER}/gen/${OUTPUT_FILE}"
 rc=$?; if [ $rc -ne 0 ]; then echo "ERROR: pythia failed (exit $rc)"; exit $rc; fi
 
+eos_cp "/tmp/${USER}/gen/${OUTPUT_FILE}.hepmc" "${OUTPUT_DIR}/${OUTPUT_FILE}.hepmc"
 echo "GEN done: ${OUTPUT_DIR}/${OUTPUT_FILE}.hepmc"

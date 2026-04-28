@@ -23,9 +23,12 @@ Available steps (can be any subset, chained in this fixed order):
 import argparse
 import math
 import os
+import shutil
 import stat
 import subprocess
 import sys
+import tempfile
+import zipfile
 from pathlib import Path
 
 import yaml
@@ -133,6 +136,7 @@ def build_env_context(cfg: dict) -> dict:
         "pythia8_bin_dir":             str(pkg_paths["Pythia8"] / "bin"),
         "rundir":             str(pkg_paths["ALLEGRO_PandoraPFA"] / "run"),
         "pandora_settings":   paths["pandora_settings"],
+        "eos_root_url":       paths.get("eos_root_url", ""),
     }
 
 
@@ -268,10 +272,11 @@ def generate_setup_script(cfg: dict, submitdir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def make_gen_jobs(sample: dict, ecm: float, cfg: dict,
-                  submitdir: Path, jinja_env: Environment,
+                  submitdir: Path, scriptsdir: Path, jinja_env: Environment,
                   env_ctx: dict) -> list[dict]:
     paths = cfg["paths"]
     wf = cfg["workflow"]["gen"]
+    step = "gen"
     tag = sample_tag(sample["name"], ecm)
     nevents_total = sample["total_events"]
     nevents_job = wf["events_per_job"]
@@ -298,7 +303,7 @@ def make_gen_jobs(sample: dict, ecm: float, cfg: dict,
             nevents=nevents_job, seed=seed,
             **env_ctx,
         )
-        script_path = submitdir / "scripts" / f"{job_name}.sh"
+        script_path = scriptsdir / "scripts" / f"{job_name}.sh"
         write_executable(script_path, script_content)
 
         log_dir = submitdir / "logs" / tag
@@ -323,7 +328,7 @@ def make_gen_jobs(sample: dict, ecm: float, cfg: dict,
 
 
 def make_sim_jobs(sample: dict, ecm: float, cfg: dict,
-                  submitdir: Path, jinja_env: Environment,
+                  submitdir: Path, scriptsdir: Path, jinja_env: Environment,
                   env_ctx: dict, gen_nodes: list[dict]) -> list[dict]:
     paths = cfg["paths"]
     wf_sim = cfg["workflow"]["sim"]
@@ -352,7 +357,7 @@ def make_sim_jobs(sample: dict, ecm: float, cfg: dict,
                 nevents=wf_sim["events_per_job"], skip_events=skip, seed=seed,
                 **env_ctx,
             )
-            script_path = submitdir / "scripts" / f"{job_name}.sh"
+            script_path = scriptsdir / "scripts" / f"{job_name}.sh"
             write_executable(script_path, script_content)
 
             log_dir = submitdir / "logs" / tag
@@ -378,7 +383,7 @@ def make_sim_jobs(sample: dict, ecm: float, cfg: dict,
 
 
 def make_reco_jobs(sample: dict, ecm: float, cfg: dict,
-                   submitdir: Path, jinja_env: Environment,
+                   submitdir: Path, scriptsdir: Path, jinja_env: Environment,
                    env_ctx: dict, sim_nodes: list[dict]) -> list[dict]:
     paths = cfg["paths"]
     wf_reco = cfg["workflow"]["reco"]
@@ -406,7 +411,7 @@ def make_reco_jobs(sample: dict, ecm: float, cfg: dict,
             output_dir=output_dir, output_file=output_file,
             **env_ctx,
         )
-        script_path = submitdir / "scripts" / f"{job_name}.sh"
+        script_path = scriptsdir / "scripts" / f"{job_name}.sh"
         write_executable(script_path, script_content)
 
         log_dir = submitdir / "logs" / tag
@@ -415,7 +420,7 @@ def make_reco_jobs(sample: dict, ecm: float, cfg: dict,
         sub_content = render(
             jinja_env, "condor.sub.j2",
             job_name=job_name, script=script_path,
-            log_dir=log_dir, job_flavour=wf_reco["job_flavour"],
+            log_dir=log_dir, step="reco", tag=tag, job_flavour=wf_reco["job_flavour"],
             request_memory=wf_reco["request_memory"], retry_request_memory=wf_reco["retry_request_memory"],
         )
         sub_path = submitdir / "condor" / f"{job_name}.sub"
@@ -432,11 +437,12 @@ def make_reco_jobs(sample: dict, ecm: float, cfg: dict,
 
 
 def make_merge_jobs(sample: dict, ecm: float, cfg: dict,
-                    submitdir: Path, jinja_env: Environment,
+                    submitdir: Path, scriptsdir: Path, jinja_env: Environment,
                     env_ctx: dict, reco_nodes: list[dict]) -> list[dict]:
     paths = cfg["paths"]
     wf = cfg["workflow"]["merge"]
     wf_reco = cfg["workflow"]["reco"]
+    step = "merge"
     tag = sample_tag(sample["name"], ecm)
 
     reco_per_merge = max(1, wf["events_per_merged_file"] // wf_reco["events_per_job"])
@@ -457,7 +463,7 @@ def make_merge_jobs(sample: dict, ecm: float, cfg: dict,
             input_files=input_files,
             **env_ctx,
         )
-        script_path = submitdir / "scripts" / f"{job_name}.sh"
+        script_path = scriptsdir / "scripts" / f"{job_name}.sh"
         write_executable(script_path, script_content)
 
         log_dir = submitdir / "logs" / tag
@@ -482,10 +488,11 @@ def make_merge_jobs(sample: dict, ecm: float, cfg: dict,
 
 
 def make_ntuple_job(sample: dict, ecm: float, cfg: dict,
-                    submitdir: Path, jinja_env: Environment,
+                    submitdir: Path, scriptsdir: Path, jinja_env: Environment,
                     env_ctx: dict, merge_nodes: list[dict]) -> dict:
     paths = cfg["paths"]
     wf = cfg["workflow"]["ntuple"]
+    step = "ntuple"
     tag = sample_tag(sample["name"], ecm)
 
     job_name = f"ntuple_{tag}"
@@ -500,7 +507,7 @@ def make_ntuple_job(sample: dict, ecm: float, cfg: dict,
         input_files=input_files,
         **env_ctx,
     )
-    script_path = submitdir / "scripts" / f"{job_name}.sh"
+    script_path = scriptsdir / "scripts" / f"{job_name}.sh"
     write_executable(script_path, script_content)
 
     log_dir = submitdir / "logs" / tag
@@ -609,9 +616,45 @@ def strip_phantom_parents(nodes: list[dict]) -> None:
 # Main workflow builder
 # ---------------------------------------------------------------------------
 
+def zip_and_move(tmp_scripts: Path, scriptsdir: Path, tag: str) -> None:
+    """Zip the scripts written to tmp, copy zip to scriptsdir, unzip there.
+    After unzipping, rewrite any paths inside .sub files that still reference
+    the tmp directory, replacing them with the final scriptsdir location.
+    """
+    zip_path = tmp_scripts.parent / f"{tag}.zip"
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for f in tmp_scripts.rglob("*"):
+            if f.is_file():
+                zf.write(f, f.relative_to(tmp_scripts))
+    # Use xrdcp for the transfer if scriptsdir looks like EOS, otherwise shutil
+    dest_zip = scriptsdir / f"{tag}.zip"
+    eos_str = str(scriptsdir)
+    if eos_str.startswith("/eos/"):
+        subprocess.run(["mkdir", "-p", eos_str], check=True)
+        subprocess.run(["xrdcp", "-f", str(zip_path), str(dest_zip)], check=True)
+    else:
+        scriptsdir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(zip_path, dest_zip)
+    zip_path.unlink()
+    with zipfile.ZipFile(dest_zip) as zf:
+        zf.extractall(scriptsdir)
+    dest_zip.unlink()
+
+    # .sub files live on AFS (submitdir) and reference the tmp script paths.
+    # Rewrite those references to point to the final scriptsdir on EOS.
+    tmp_str = str(tmp_scripts)
+    final_str = str(scriptsdir)
+    return tmp_str, final_str
+
+
 def build_workflow(cfg: dict, steps: list[str],
                    submitdir: Path, jinja_env: Environment) -> list[Path]:
     env_ctx = build_env_context(cfg)
+    # scriptsdir: where .sh scripts go. If unset, same as submitdir.
+    # When using EosSubmit, set submitdir to EOS and leave scriptsdir unset.
+    scriptsdir_cfg = cfg["paths"].get("scriptsdir")
+    scriptsdir = Path(scriptsdir_cfg) if scriptsdir_cfg else submitdir
+    use_staging = str(scriptsdir) != str(submitdir)
     dag_paths = []
 
     for sample in cfg["samples"]:
@@ -619,38 +662,47 @@ def build_workflow(cfg: dict, steps: list[str],
             tag = sample_tag(sample["name"], ecm)
             all_nodes: list[dict] = []
 
+            # If staging, write scripts to a local tmp dir first
+            if use_staging:
+                tmp_scripts = Path(tempfile.mkdtemp(prefix=f"batch_{tag}_"))
+                effective_scriptsdir = tmp_scripts
+            else:
+                effective_scriptsdir = scriptsdir
+
             gen_nodes = sim_nodes = reco_nodes = merge_nodes = []
 
             if "gen" in steps and cfg["workflow"]["gen"]["enabled"]:
-                gen_nodes = make_gen_jobs(sample, ecm, cfg, submitdir, jinja_env, env_ctx)
+                gen_nodes = make_gen_jobs(sample, ecm, cfg, submitdir, effective_scriptsdir, jinja_env, env_ctx)
                 all_nodes.extend(gen_nodes)
 
             if "sim" in steps and cfg["workflow"]["sim"]["enabled"]:
                 upstream = gen_nodes or phantom_gen_nodes(sample, ecm, cfg)
-                sim_nodes = make_sim_jobs(sample, ecm, cfg, submitdir, jinja_env, env_ctx, upstream)
+                sim_nodes = make_sim_jobs(sample, ecm, cfg, submitdir, effective_scriptsdir, jinja_env, env_ctx, upstream)
                 strip_phantom_parents(sim_nodes)
                 all_nodes.extend(sim_nodes)
 
             if "reco" in steps and cfg["workflow"]["reco"]["enabled"]:
                 upstream = sim_nodes or phantom_sim_nodes(sample, ecm, cfg)
-                reco_nodes = make_reco_jobs(sample, ecm, cfg, submitdir, jinja_env, env_ctx, upstream)
+                reco_nodes = make_reco_jobs(sample, ecm, cfg, submitdir, effective_scriptsdir, jinja_env, env_ctx, upstream)
                 strip_phantom_parents(reco_nodes)
                 all_nodes.extend(reco_nodes)
 
             if "merge" in steps and cfg["workflow"]["merge"]["enabled"]:
                 upstream = reco_nodes or phantom_reco_nodes(sample, ecm, cfg)
-                merge_nodes = make_merge_jobs(sample, ecm, cfg, submitdir, jinja_env, env_ctx, upstream)
+                merge_nodes = make_merge_jobs(sample, ecm, cfg, submitdir, effective_scriptsdir, jinja_env, env_ctx, upstream)
                 strip_phantom_parents(merge_nodes)
                 all_nodes.extend(merge_nodes)
 
             if "ntuple" in steps and cfg["workflow"]["ntuple"]["enabled"]:
                 upstream = merge_nodes or phantom_merge_nodes(sample, ecm, cfg)
-                ntuple_node = make_ntuple_job(sample, ecm, cfg, submitdir, jinja_env, env_ctx, upstream)
+                ntuple_node = make_ntuple_job(sample, ecm, cfg, submitdir, effective_scriptsdir, jinja_env, env_ctx, upstream)
                 ntuple_node["parents"] = [p for p in ntuple_node["parents"] if p is not None]
                 all_nodes.append(ntuple_node)
 
             if not all_nodes:
                 print(f"[{tag}] No enabled steps — skipping.")
+                if use_staging and 'tmp_scripts' in dir():
+                    shutil.rmtree(tmp_scripts, ignore_errors=True)
                 continue
 
             dag_path = submitdir / "dags" / f"{tag}.dag"
@@ -658,6 +710,17 @@ def build_workflow(cfg: dict, steps: list[str],
             dag_paths.append(dag_path)
             steps_in_dag = sorted({n["step"] for n in all_nodes}, key=STEP_ORDER.index)
             print(f"[{tag}] DAG with {len(all_nodes)} jobs, steps: {' -> '.join(steps_in_dag)}")
+
+            if use_staging:
+                print(f"[{tag}] Staging scripts to EOS ...")
+                tmp_str, final_str = zip_and_move(tmp_scripts, scriptsdir, tag)
+                # Rewrite .sub files on AFS: replace tmp script paths with EOS paths
+                for sub_file in (submitdir / "condor").glob(f"*{tag}*.sub"):
+                    content = sub_file.read_text()
+                    if tmp_str in content:
+                        sub_file.write_text(content.replace(tmp_str, final_str))
+                shutil.rmtree(tmp_scripts, ignore_errors=True)
+                print(f"[{tag}] Done.")
 
     return dag_paths
 
@@ -707,10 +770,18 @@ def main():
             print(f"  {p}")
         return
 
+    # Use EosSubmit schedd automatically if submitdir is on EOS
+    use_eos_schedd = str(submitdir).startswith("/eos/")
+    if use_eos_schedd:
+        print("\n[info] submitdir is on EOS — using EosSubmit schedd.")
+        print("[info] Run: module load lxbatch/eossubmit")
+        print("[info] This must be done in your shell before submitting, or DAGMan won't find the right schedd.")
+
     print(f"\nSubmitting {len(dag_paths)} DAG(s)...")
     for dag in dag_paths:
-        result = subprocess.run(["condor_submit_dag", str(dag)],
-                                capture_output=True, text=True)
+        cmd = ["bash", "-c",
+               f"module load lxbatch/eossubmit && condor_submit_dag {dag}"]               if use_eos_schedd else ["condor_submit_dag", str(dag)]
+        result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0:
             print(f"  [OK] {dag.name}")
         else:

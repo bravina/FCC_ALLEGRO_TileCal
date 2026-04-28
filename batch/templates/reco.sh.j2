@@ -5,24 +5,24 @@
 {% include '_env.sh.j2' %}
 
 # --- Parameters ---
-OUTPUT_DIR={{ output_dir }}
-OUTPUT_FILE={{ output_file }}
-
 INPUT_FILES=(
 {% for f in sim_files %}
   "{{ f }}"
 {% endfor %}
 )
+OUTPUT_DIR={{ output_dir }}
+OUTPUT_FILE={{ output_file }}
+LOCAL_OUT="/tmp/${USER}/reco/${OUTPUT_FILE}"
 
-mkdir -p "${OUTPUT_DIR}"
+mkdir -p "/tmp/${USER}/reco"
 
-# k4run must be run from the directory containing the auxiliary files
 cd {{ rundir }}
 
 k4run run_reco_pandora.py \
   --pandoraSettings "{{ pandora_settings }}" \
   --IOSvc.Input     "${INPUT_FILES[@]}" \
-  --IOSvc.Output    "${OUTPUT_DIR}/${OUTPUT_FILE}"
+  --IOSvc.Output    "${LOCAL_OUT}"
 rc=$?; if [ $rc -ne 0 ]; then echo "ERROR: k4run failed (exit $rc)"; exit $rc; fi
 
+eos_cp "${LOCAL_OUT}" "${OUTPUT_DIR}/${OUTPUT_FILE}"
 echo "RECO done: ${OUTPUT_DIR}/${OUTPUT_FILE}"
