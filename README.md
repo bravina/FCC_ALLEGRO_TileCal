@@ -47,7 +47,7 @@ FCC_ALLEGRO_TileCal/           # this git repository
 | Package | Source | Branch |
 |---|---|---|
 | `k4geo` | `bravina/k4geo` | `hcal-new-geometry` |
-| `k4RecTracker` | `bravina/k4RecTracker` | `pandora` |
+| `k4RecTracker` | `bravina/k4RecTracker` | `master-archil` |
 | `PandoraSDK` | `giovannimarchiori/PandoraSDK` | `master` |
 | `LCContent` | `bravina/LCContent` | `ALLEGRO` |
 | `DDMarlinPandora` | `bravina/DDMarlinPandora` | `test-hcal-cell-dimensions` |
@@ -73,7 +73,7 @@ cd /afs/cern.ch/work/r/ravinab/public/FCC_ALLEGRO_TileCal
 
 # Clone dependency repos
 git clone https://github.com/bravina/k4geo.git && cd k4geo && git checkout hcal-new-geometry && cd ..
-git clone https://github.com/bravina/k4RecTracker.git && cd k4RecTracker && git checkout pandora && cd ..
+git clone https://github.com/bravina/k4RecTracker.git && cd k4RecTracker && git checkout master-archil && cd ..
 git clone https://github.com/giovannimarchiori/PandoraSDK.git
 git clone https://github.com/bravina/LCContent.git && cd LCContent && git checkout ALLEGRO && cd ..
 git clone https://github.com/bravina/DDMarlinPandora.git && cd DDMarlinPandora && git checkout test-hcal-cell-dimensions && cd ..
@@ -388,38 +388,74 @@ Each gen job `i` receives seed `base_seed + i`; sim jobs are offset by 10000
 to avoid collisions. Seeds are therefore unique across all jobs within a sample.
 
 ### Submitting jobs
-
+ 
 The `--steps` argument controls which pipeline stages to include. Any subset
 may be specified; when multiple steps are given they are chained via DAGMan.
-
+ 
 ```bash
 # Full pipeline for all samples in config.yaml
 python batch/submit.py --config batch/config.yaml \
   --steps gen sim reco merge ntuple
-
+ 
 # Simulation and reconstruction only (generation already done)
 python batch/submit.py --config batch/config.yaml \
   --steps sim reco
-
+ 
 # Reconstruction, merge, and ntuple only
 python batch/submit.py --config batch/config.yaml \
   --steps reco merge ntuple
-
+ 
 # Dry run: generate all job scripts and DAG files without submitting
 python batch/submit.py --config batch/config.yaml \
   --steps sim reco merge ntuple --dry-run
 ```
-
+ 
 When steps are run independently (e.g. `--steps sim` after gen has already
 finished), `submit.py` reconstructs the expected input file paths from the
 config rather than relying on DAG dependencies — so as long as the files exist
 on disk at the paths derived from `runsdir`, everything will work.
-
+ 
+#### EosSubmit schedds (recommended for large campaigns)
+ 
+For campaigns with many jobs (energy scans, large event counts), set `submitdir`
+in `config.yaml` to an EOS path. `submit.py` will detect this automatically and
+use the EosSubmit schedd, which reads all job files directly from EOS via xrootd
+and avoids AFS quota issues entirely.
+ 
+Before submitting, load the EosSubmit schedd in your shell:
+ 
+```bash
+module load lxbatch/eossubmit
+```
+ 
+This only needs to be done once per session. `submit.py` will attempt to load
+it automatically when submitting, but loading it manually first is recommended.
+ 
+When using EosSubmit, **all files** (DAGs, scripts, sub files, logs) must be on
+EOS — set `submitdir` to an EOS path and leave `scriptsdir` unset in `config.yaml`:
+ 
+```yaml
+paths:
+  submitdir: /eos/user/r/ravinab/FCC_ALLEGRO_TileCal/batch/jobs
+  # scriptsdir: leave unset — defaults to submitdir
+```
+ 
+To switch back to the standard schedd (e.g. for small tests):
+ 
+```bash
+module unload lxbatch/eossubmit
+# and set submitdir back to AFS in config.yaml
+```
+ 
+For large campaigns with `scriptsdir` on EOS and `submitdir` on AFS (not
+recommended with EosSubmit), `submit.py` will zip the scripts, transfer them
+to EOS via `xrdcp`, and rewrite the paths in the `.sub` files automatically.
+ 
 ### Output directory structure
-
+ 
 All output lands under `runsdir` (configured in `config.yaml`), organised by
 step and sample tag (e.g. `ttbar_ecm365`):
-
+ 
 ```
 $RUNSDIR/
     gen/
@@ -427,12 +463,12 @@ $RUNSDIR/
             gen_ttbar_ecm365_0000.hepmc   # one file per gen job
     sim/
         ttbar_ecm365/
-            sim_ttbar_ecm365_0000.root    # 100 events each
+            sim_ttbar_ecm365_0000.root    # 50 events each (default)
             sim_ttbar_ecm365_0001.root
             ...
     reco/
         ttbar_ecm365/
-            reco_ttbar_ecm365_0000.root
+            reco_ttbar_ecm365_0000.root   # 200 events each (default, 4 sim files)
             ...
     merge/
         ttbar_ecm365/
@@ -441,80 +477,95 @@ $RUNSDIR/
         ttbar_ecm365/
             ntuple_ttbar_ecm365.root      # single output per sample+ECM
 ```
-
+ 
 For energy scan samples each ECM point is a separate subdirectory, e.g.
-`ttbar_scan_1GeV_ecm330/`, `ttbar_scan_1GeV_ecm331/`, etc.
-
+`ttbar_scan_ecm330/`, `ttbar_scan_ecm332/`, etc.
+ 
 ### Monitoring jobs
-
+ 
 For a per-step breakdown of the pipeline, use `batch/status.py`. It parses
-the HTCondor log files written to `batch/jobs/logs/` in real time and shows
+the HTCondor log files written to `submitdir/logs/` in real time and shows
 how many jobs in each step are idle, running, done, or failed:
-
+ 
 ```bash
 # Status of all samples that have started running
 python batch/status.py --config batch/config.yaml
-
+ 
 # Filter to a single sample or ECM point
 python batch/status.py --config batch/config.yaml --sample ttbar_ecm365
-
+ 
 # Also print the names and exit codes of any failed jobs
 python batch/status.py --config batch/config.yaml --failed
 ```
-
+ 
 Example output:
-
+ 
 ```
 Pipeline status  —  submitdir: .../batch/jobs
-
-ttbar_ecm365  (101/203 done)
-  Step      Done    Run   Fail   Held   Idle  Total  Progress
-  --------------------------------------------------------------------------------
-  gen          1      0      0      0      0      1  [██████████████████████████████]
-  sim        100      0      0      0      0    100  [██████████████████████████████]
-  reco         0     50      0      0     50    100  [▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶···············]
-  merge        0      0      0      0      1      1  [······························]
-  ntuple       0      0      0      0      1      1  [······························]
+ 
+ttbar_ecm365  (101/253 done)
+  Step        Done     Run    Fail    Held    Idle   Total  Progress
+  -------------------------------------------------------------------------------------
+  gen            1       0       0       0       0       1  [██████████████████████████████]
+  sim          200       0       0       0       0     200  [██████████████████████████████]
+  reco           0      50       0       0       0      50  [▶▶▶▶▶▶▶▶▶▶▶▶▶▶▶···············]
+  merge          0       0       0       0       1       1  [······························]
+  ntuple         0       0       0       0       1       1  [······························]
 ```
-
+ 
 Unlike `condor_q`, `status.py` works by reading the log files directly so it
 reflects the current state even for jobs that have already finished and left
-the queue. Samples with no log files yet (not yet submitted) are silently
-skipped unless explicitly requested with `--sample`.
-
+the queue. Samples with no log files yet are silently skipped unless explicitly
+requested with `--sample`.
+ 
 For a higher-level view of the HTCondor queue:
-
+ 
 ```bash
 # Overview of all running/idle/held jobs
 condor_q
-
+ 
 # DAG-level status (shows which nodes are done/running/failed)
 condor_q -dag
-
-# Watch a specific DAG
-condor_watch_q
-
-# Check logs for a failed job (logs land in batch/jobs/logs/<tag>/)
-cat batch/jobs/logs/ttbar_ecm365/sim_ttbar_ecm365_0003.<ClusterId>.err
+ 
+# Why is a job held?
+condor_q -held -af ClusterId HoldReason
+ 
+# Kill all jobs
+condor_rm -all
 ```
 
+Note: if `submitdir` is on EOS (EosSubmit schedd), prefix all `condor_q`
+commands with `module load lxbatch/eossubmit`, or use `status.py --condorq`
+which handles this automatically.
+ 
 ### Re-running failed jobs
-
+ 
 If individual jobs fail, DAGMan marks them as failed and holds the downstream
 steps. To retry:
-
+ 
 ```bash
 # Resubmit the DAG in recovery mode — DAGMan skips already-completed nodes
-condor_submit_dag -DoRescue batch/jobs/dags/ttbar_ecm365.dag
+condor_submit_dag -DoRecovery -Force batch/jobs/dags/ttbar_ecm365.dag
 ```
-
+ 
 A `.rescue` file is written automatically by DAGMan after any failure.
-
+DAGMan finds it automatically when `-DoRecovery` is passed — no need to
+specify the rescue file explicitly. The `-Force` flag overwrites the stale
+`.condor.sub` and log files from the previous submission.
+ 
+To release held jobs after fixing the underlying issue (e.g. memory limit):
+ 
+```bash
+condor_release -all
+# or for a specific job:
+condor_release <ClusterId>
+```
+ 
 ### Adding a new sample
-
+ 
 Add an entry to the `samples` list in `config.yaml` and re-run `submit.py`.
 Previously submitted DAGs are unaffected. Example — adding ZZ at 240 GeV:
-
+ 
 ```yaml
   - name: ZZ
     card: Pythia8/cards/p8_ee_ZZ.cmd
@@ -523,6 +574,7 @@ Previously submitted DAGs are unaffected. Example — adding ZZ at 240 GeV:
     ecm:
       - 240
 ```
+
 
 ---
 
