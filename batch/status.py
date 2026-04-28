@@ -41,10 +41,10 @@ def sample_tag(name: str, ecm: float) -> str:
     return f"{name}_ecm{ecm_str}"
 
 
-# Matches "Cmd: /path/to/gen_ttbar_ecm330_0000.sh" in execute event blocks
+# Matches "DAG Node: gen_ttbar_ecm330_0000" in submit event blocks (EosSubmit)
+RE_DAG_NODE = re.compile(r"DAG Node:\s+(\S+)")
+# Matches "Cmd: /path/to/gen_ttbar_ecm330_0000.sh" in execute event blocks (fallback)
 RE_CMD = re.compile(r"Cmd:\s+\S+/(\w+)\.sh")
-# Matches proc ID from event header: "001 (12345.003.000)"
-RE_PROC = re.compile(r"^\d{3} \(\d+\.(\d+)\.\d+\)")
 
 
 def parse_shared_log(log_path: Path) -> dict[str, dict]:
@@ -68,23 +68,29 @@ def parse_shared_log(log_path: Path) -> dict[str, dict]:
             continue
 
         first_line = block.splitlines()[0] if block.splitlines() else ""
-        m = re.match(r"^(\d{3}) \(\d+\.(\d+)\.\d+\)", first_line)
+        m = re.match(r"^(\d{3}) \((\d+)\.(\d+)\.\d+\)", first_line)
         if not m:
             continue
         code = int(m.group(1))
-        proc = m.group(2)
+        # Use cluster.proc as key — each job is a separate cluster (proc always 0)
+        proc = f"{m.group(2)}.{m.group(3)}"
 
         if proc not in proc_states:
             proc_states[proc] = {"state": "idle", "exit_code": None}
 
         if code == EVT_SUBMIT:
             proc_states[proc]["state"] = "idle"
+            # EosSubmit logs "DAG Node: <job_name>" in submit event
+            m_node = RE_DAG_NODE.search(block)
+            if m_node:
+                proc_to_name[proc] = m_node.group(1)
         elif code == EVT_START:
             proc_states[proc]["state"] = "running"
-            # Extract job name from Cmd line in this block
-            m_cmd = RE_CMD.search(block)
-            if m_cmd:
-                proc_to_name[proc] = m_cmd.group(1)
+            # Fallback: try Cmd field in execute event
+            if proc not in proc_to_name:
+                m_cmd = RE_CMD.search(block)
+                if m_cmd:
+                    proc_to_name[proc] = m_cmd.group(1)
         elif code == EVT_HOLD:
             proc_states[proc]["state"] = "held"
         elif code == EVT_EVICT:
@@ -115,7 +121,16 @@ def collect_log_states(submitdir: Path, tag: str) -> dict[str, dict]:
     if not log_dir.exists():
         return states
     for log_file in sorted(log_dir.glob("*.log")):
-        states.update(parse_shared_log(log_file))
+        parsed = parse_shared_log(log_file)
+        # If job names were not resolved from Cmd, use log filename stem
+        # e.g. "gen_ttbar_scan_ecm330.log" -> prefix jobs as "gen_<proc>"
+        stem = log_file.stem  # e.g. gen_ttbar_scan_ecm330
+        fixed = {}
+        for name, info in parsed.items():
+            if name.startswith("proc_"):
+                name = f"{stem}_{name}"
+            fixed[name] = info
+        states.update(fixed)
     return states
 
 
