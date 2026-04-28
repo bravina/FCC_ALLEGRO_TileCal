@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""
+jet-ntupleizer  —  Build jet and lepton ntuples from PandoraPFA PFOs
+                   in ALLEGRO reco files, using JetClustering::PyInterface.
+
+Jets are clustered with anti-kt R=0.5 from all PFOs except electrons (|PDG|=11),
+muons (|PDG|=13), and photons (PDG=22). Electrons and muons are saved separately.
+
+Usage:
+    jet-ntupleizer --inputFiles reco1.root reco2.root --outputFile jets.root
+    jet-ntupleizer --inputFiles "reco/*.root" --outputFile jets.root --maxEvents 100
+"""
+
+import os
+import sys
+import glob
+import argparse
+
+import ROOT
+ROOT.gErrorIgnoreLevel = ROOT.kWarning
+ROOT.gSystem.Load("libCaloNtupleizer.so")
+
+# Load JetClustering — header-only, compiled into libCaloNtupleizer
+ROOT.gInterpreter.Declare('#include "CaloNtupleizer/JetClustering.h"')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--inputFiles",  nargs="+", required=True)
+    parser.add_argument("--outputFile",  required=True)
+    parser.add_argument("--jetR",        type=float, default=0.5,
+                        help="Anti-kt jet radius (default: 0.5)")
+    parser.add_argument("--jetPtMin",    type=float, default=1.0,
+                        help="Minimum jet pt in GeV (default: 1.0)")
+    parser.add_argument("--maxEvents",   type=int,   default=-1,
+                        help="Max events to process (-1 = all)")
+    args = parser.parse_args()
+
+    # Expand globs
+    input_files = []
+    for pattern in args.inputFiles:
+        expanded = glob.glob(pattern)
+        input_files.extend(expanded if expanded else [pattern])
+    if not input_files:
+        print("ERROR: no input files found.")
+        sys.exit(1)
+    print(f"Input files ({len(input_files)}):")
+    for f in input_files:
+        print(f"  {f}")
+
+    # Jet R and ptMin as strings for RDataFrame Define calls
+    R      = args.jetR
+    ptMin  = args.jetPtMin
+    R_str     = f"{R}"
+    ptMin_str = f"{ptMin}"
+
+    # Build RDataFrame
+    df = ROOT.RDataFrame("events", ROOT.std.vector("string")(input_files))
+
+    n_total = df.Count().GetValue()
+    print(f"Total events: {n_total}")
+    if args.maxEvents > 0:
+        df = df.Range(args.maxEvents)
+        print(f"Processing first {args.maxEvents} events.")
+
+    # PFO collection branch name in the reco file
+    PFO = "PandoraPFANewPFOs"
+    MC  = "MCParticles"
+
+    # --- Define jet branches ---
+    # Each returns RVec<float>, one entry per jet, sorted by pt descending
+    df = df.Define("jet_pt",
+        f'JetClustering::PyInterface::getJet_pt({PFO}, {R_str}, {ptMin_str})')
+    df = df.Define("jet_eta",
+        f'JetClustering::PyInterface::getJet_eta({PFO}, {R_str}, {ptMin_str})')
+    df = df.Define("jet_phi",
+        f'JetClustering::PyInterface::getJet_phi({PFO}, {R_str}, {ptMin_str})')
+    df = df.Define("jet_e",
+        f'JetClustering::PyInterface::getJet_e({PFO}, {R_str}, {ptMin_str})')
+    df = df.Define("jet_mass",
+        f'JetClustering::PyInterface::getJet_mass({PFO}, {R_str}, {ptMin_str})')
+    df = df.Define("jet_px",
+        f'JetClustering::PyInterface::getJet_px({PFO}, {R_str}, {ptMin_str})')
+    df = df.Define("jet_py",
+        f'JetClustering::PyInterface::getJet_py({PFO}, {R_str}, {ptMin_str})')
+    df = df.Define("jet_pz",
+        f'JetClustering::PyInterface::getJet_pz({PFO}, {R_str}, {ptMin_str})')
+    df = df.Define("nJet",
+        f'JetClustering::PyInterface::getJet_n({PFO}, {R_str}, {ptMin_str})')
+
+    # --- Define electron branches ---
+    df = df.Define("electron_px",
+        f'JetClustering::PyInterface::getElectron_px({PFO})')
+    df = df.Define("electron_py",
+        f'JetClustering::PyInterface::getElectron_py({PFO})')
+    df = df.Define("electron_pz",
+        f'JetClustering::PyInterface::getElectron_pz({PFO})')
+    df = df.Define("electron_e",
+        f'JetClustering::PyInterface::getElectron_e({PFO})')
+    df = df.Define("nElectron",
+        f'JetClustering::PyInterface::getElectron_n({PFO})')
+
+    # --- Define muon branches ---
+    df = df.Define("muon_px",
+        f'JetClustering::PyInterface::getMuon_px({PFO})')
+    df = df.Define("muon_py",
+        f'JetClustering::PyInterface::getMuon_py({PFO})')
+    df = df.Define("muon_pz",
+        f'JetClustering::PyInterface::getMuon_pz({PFO})')
+    df = df.Define("muon_e",
+        f'JetClustering::PyInterface::getMuon_e({PFO})')
+    df = df.Define("nMuon",
+        f'JetClustering::PyInterface::getMuon_n({PFO})')
+
+    # --- PFO-level summary scalars (from existing CaloNtupleizer) ---
+    df = df.Define("totalVisibleEnergy",
+        f'CaloNtupleizer::PyInterface::getTotalPFO_energy({PFO})')
+
+    # --- Generator-level cos(theta_QQ) ---
+    df = df.Define("genParticle_cosThetaQQ",
+        f'CaloNtupleizer::PyInterface::getQQ_cosTheta({MC})')
+    df = df.Define("genParticle_vertex_z",
+        f'CaloNtupleizer::PyInterface::getMCParticle_vertex_z({MC})')
+
+    # --- Snapshot to output ---
+    branches = ROOT.std.vector("string")()
+    for b in [
+        "nJet", "jet_pt", "jet_eta", "jet_phi", "jet_e", "jet_mass",
+        "jet_px", "jet_py", "jet_pz",
+        "nElectron", "electron_px", "electron_py", "electron_pz", "electron_e",
+        "nMuon",     "muon_px",     "muon_py",     "muon_pz",     "muon_e",
+        "totalVisibleEnergy",
+        "genParticle_cosThetaQQ",
+        "genParticle_vertex_z",
+    ]:
+        branches.push_back(b)
+
+    output_path = os.path.abspath(args.outputFile)
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    print(f"Writing: {output_path}")
+    df.Snapshot("events", output_path, branches)
+    print("Done.")
+    print("\nBranches written:")
+    print("  Jets     : nJet, jet_pt/eta/phi/e/mass/px/py/pz")
+    print("  Electrons: nElectron, electron_px/py/pz/e")
+    print("  Muons    : nMuon, muon_px/py/pz/e")
+    print("  Event    : totalVisibleEnergy, genParticle_cosThetaQQ, genParticle_vertex_z")
+
+
+if __name__ == "__main__":
+    main()

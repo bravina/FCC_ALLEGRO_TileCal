@@ -17,6 +17,29 @@ find_package(podio REQUIRED)
 find_package(EDM4HEP REQUIRED)
 find_package(DD4hep REQUIRED)
 
+# FastJet — no CMake config file shipped, use fastjet-config instead
+find_program(FASTJET_CONFIG NAMES fastjet-config REQUIRED
+    DOC "Path to fastjet-config script")
+execute_process(
+    COMMAND ${FASTJET_CONFIG} --cxxflags
+    OUTPUT_VARIABLE FASTJET_CXX_FLAGS
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(
+    COMMAND ${FASTJET_CONFIG} --libs
+    OUTPUT_VARIABLE FASTJET_LIBS
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(
+    COMMAND ${FASTJET_CONFIG} --prefix
+    OUTPUT_VARIABLE FASTJET_PREFIX
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+message(STATUS "FastJet prefix   : ${FASTJET_PREFIX}")
+message(STATUS "FastJet cxxflags : ${FASTJET_CXX_FLAGS}")
+message(STATUS "FastJet libs     : ${FASTJET_LIBS}")
+
+# Convert space-separated flags to a list for CMake
+separate_arguments(FASTJET_CXX_FLAGS_LIST UNIX_COMMAND "${FASTJET_CXX_FLAGS}")
+separate_arguments(FASTJET_LIBS_LIST      UNIX_COMMAND "${FASTJET_LIBS}")
+
 # ----------------------------
 # Compiler setup
 # ----------------------------
@@ -30,10 +53,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 file(GLOB sources src/*.cc)
 file(GLOB headers RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CaloNtupleizer/*.h)
 list(FILTER headers EXCLUDE REGEX "LinkDef.h")
-# ----------------------------
-set(DICT_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/CaloNtupleizer/CaloNtupleizer.h)
-set(LINKDEF ${CMAKE_CURRENT_SOURCE_DIR}/CaloNtupleizer/LinkDef.h)
 
+set(DICT_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/CaloNtupleizer/CaloNtupleizer.h)
+set(LINKDEF      ${CMAKE_CURRENT_SOURCE_DIR}/CaloNtupleizer/LinkDef.h)
 
 # ----------------------------
 # Build shared library
@@ -47,6 +69,11 @@ target_include_directories(CaloNtupleizer PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
     ${VDT_INCLUDE_DIR}
+    ${FASTJET_PREFIX}/include
+)
+
+target_compile_options(CaloNtupleizer PRIVATE
+    ${FASTJET_CXX_FLAGS_LIST}
 )
 
 target_link_libraries(CaloNtupleizer PUBLIC
@@ -62,6 +89,7 @@ target_link_libraries(CaloNtupleizer PUBLIC
     EDM4HEP::edm4hep
     EDM4HEP::edm4hepDict
     DD4hep::DDCore
+    ${FASTJET_LIBS_LIST}
 )
 
 message("${headers}")
@@ -70,14 +98,6 @@ ROOT_GENERATE_DICTIONARY(G__CaloNtupleizer
                          LINKDEF CaloNtupleizer/LinkDef.h
                          MODULE CaloNtupleizer
 )
-
-#ROOT_GENERATE_DICTIONARY(CaloNtupleizerDict
-#    ${DICT_HEADERS}
-#    LINKDEF ${LINKDEF}
-#    MODULE CaloNtupleizer
-#)
-
-#add_dependencies(CaloNtupleizer CaloNtupleizerDict)
 
 # ----------------------------
 # Installation
@@ -91,6 +111,12 @@ set_target_properties(CaloNtupleizer PROPERTIES
 install(TARGETS CaloNtupleizer
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CaloNtupleizer
+)
+
+# Install JetClustering.h alongside CaloNtupleizer headers
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/CaloNtupleizer/JetClustering.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/CaloNtupleizer
 )
 
 # The rootmap file
